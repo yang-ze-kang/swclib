@@ -3,7 +3,7 @@ import os
 import bisect
 import queue
 import numpy as np
-from anytree import iterators
+from anytree import iterators, PreOrderIter
 import miniball
 
 from swclib.data.swc_node import SwcNode
@@ -147,14 +147,12 @@ class SwcTree:
     def length(self, force_update=False):
         if self._total_length is not None and force_update == False:
             return self._total_length
-
         node_list = self.get_node_list()
         result = 0
         for tn in node_list:
             if tn.is_virtual() or tn.parent.is_virtual():
                 continue
             result += tn.parent_distance()
-
         return result
 
     def get_depth_array(self, node_num):
@@ -542,3 +540,16 @@ class SwcTree:
                 elif not only_from_soma:
                     fibers.append(fiber)
         return fibers
+    
+    def get_components(self):
+        """
+        获取连通分量
+        Return: list of node list.
+        """
+        components = []
+        for child in self.root.children():
+            component = []
+            for node in PreOrderIter(child):
+                component.append(node)
+            components.append(component)
+        return components
