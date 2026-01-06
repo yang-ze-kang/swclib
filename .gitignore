@@ -1,3 +1,4 @@
+./swclib.egg-info
 **/__pycache__/
 *.pyc
 **/*.egg-info/
