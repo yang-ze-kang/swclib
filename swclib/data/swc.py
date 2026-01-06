@@ -54,7 +54,7 @@ class Swc(object):
     def check_min_distance_between_non_adjacent_nodes(self, threshold=5.0):
         n = len(self.nodes)
         if n < 3:
-            return np.inf, None
+            return np.inf, []
         id2idx = {idx:node_id for idx, node_id in enumerate(self.nodes.keys())}
         coords = [[node['x'], node['y'], node['z']] for node_id, node in self.nodes.items()]
         tree = cKDTree(coords)
