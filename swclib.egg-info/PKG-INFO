@@ -1,3 +1,8 @@
 Metadata-Version: 2.4
 Name: swclib
 Version: 0.1
+Requires-Dist: numpy
+Requires-Dist: anytree
+Requires-Dist: miniball
+Requires-Dist: scipy
+Requires-Dist: networkx

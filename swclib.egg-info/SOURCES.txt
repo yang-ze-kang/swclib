@@ -2,6 +2,7 @@ pyproject.toml
 swclib.egg-info/PKG-INFO
 swclib.egg-info/SOURCES.txt
 swclib.egg-info/dependency_links.txt
+swclib.egg-info/requires.txt
 swclib.egg-info/top_level.txt
 swclib/data/euclidean_point.py
 swclib/data/swc.py

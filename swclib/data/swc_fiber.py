@@ -1,7 +1,5 @@
 from dataclasses import dataclass
-from typing import List
 import numpy as np
-import copy
 from scipy.spatial import cKDTree
 
 
