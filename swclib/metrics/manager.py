@@ -56,7 +56,7 @@ class MetricManager:
         return metrics
 
     def add_data(self, swc_gt, swc_pred):
-        result = {}
+        result = {"gt_path":swc_gt, "pred_path":swc_pred}
         for name, metric in self.metrics.items():
             result[name] = metric.run(swc_gt, swc_pred)
         self.results.append(result)
