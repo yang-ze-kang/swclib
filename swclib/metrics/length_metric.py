@@ -692,7 +692,7 @@ class LengthMetric(object):
         res = {
             "recall": recall,
             "precision": precision,
-            "f1_score": 2 * recall * precision / (recall + precision),
+            "f1_score": 2 * recall * precision / (recall + precision + 1e-6),
             "TP":TP,
             "FP":FP,
             "FN":FN

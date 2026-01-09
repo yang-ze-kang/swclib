@@ -1,11 +1,17 @@
 import json
+from collections import defaultdict
 
+from swclib.metrics.ssd_metric import SSDMetric
 from swclib.metrics.length_metric import LengthMetric
 from swclib.metrics.keypoint_metric import KeypointMetric
 from swclib.metrics.fiber_metric import FiberMetric
 from swclib.utils.json import *
 
 default_metric_params = {
+    "ssd": {
+        "min_distance": 2.0,
+        "scale": (1.0, 1.0, 1.0),
+    },
     "length": {
         "radius_threshold": 2,
         "length_threshold": 0.2,
@@ -25,6 +31,7 @@ default_metric_params = {
 }
 
 METRIC_MAP = {
+    "ssd": SSDMetric,
     "length": LengthMetric,
     "keypoints": KeypointMetric,
     "fiber": FiberMetric,
@@ -32,7 +39,7 @@ METRIC_MAP = {
 
 
 class MetricManager:
-    def __init__(self, metric_names=["length", "keypoints", "fiber"], collect_method='micro', scale=(1.0, 1.0, 1.0)):
+    def __init__(self, metric_names=["ssd", "length", "keypoints", "fiber"], collect_method='micro', scale=(1.0, 1.0, 1.0)):
         self.metric_names = metric_names
         self.collect_method = collect_method
         self.metric_params = {key:default_metric_params[key] for key in metric_names}
@@ -56,7 +63,7 @@ class MetricManager:
         return metrics
 
     def add_data(self, swc_gt, swc_pred):
-        result = {"gt_path":swc_gt, "pred_path":swc_pred}
+        result = {"gt_path":str(swc_gt), "pred_path":str(swc_pred)}
         for name, metric in self.metrics.items():
             result[name] = metric.run(swc_gt, swc_pred)
         self.results.append(result)
@@ -64,6 +71,15 @@ class MetricManager:
     def collect(self, save_path=None):
         summary_result = {"sample_num": len(self.results)}
         for name in self.metric_names:
+            if name == 'ssd':
+                total = defaultdict(float)
+                for res in self.results:
+                    for key, value in res[name].items():
+                        total[key] += value
+                for key in total:
+                    total[key] /= len(self.results)
+                summary_result[name] = dict(total)
+                continue
             if self.collect_method == 'micro':
                 TP, FP, FN = 0, 0, 0
                 for res in self.results:

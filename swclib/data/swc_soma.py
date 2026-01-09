@@ -95,7 +95,7 @@ def create_soma_mask(somas, volume_shape=(300, 300, 300), out_path=None):
 
     return mask
 
-def nx_refine_with_soma_annotation(G: nx.Graph, soma_path: str, distance=3, scale=(1.0, 1.0, 1.0)):
+def nx_refine_with_soma_annotation(G: nx.Graph, soma_path: str, distance=3, scale=(1.0, 1.0, 1.0), min_distance=2.0):
     somas = read_soma_from_file(soma_path)
     if len(somas)>0:
         nodes = list(G.nodes())
@@ -115,8 +115,27 @@ def nx_refine_with_soma_annotation(G: nx.Graph, soma_path: str, distance=3, scal
             for id in list(set(ids2) - set(ids)):
                 if nodes[id] not in G:
                     continue
-                if G.degree[nodes[id]]==1:
-                    G.add_edge(new_id, nodes[id])
+                if G.degree[nodes[id]]!=1:
+                    continue
+                u = new_id
+                v = nodes[id]
+                p0 = np.array(G.nodes[u]["coord"][:], dtype=float)
+                p1 = np.array(G.nodes[v]["coord"][:], dtype=float)
+                d = float(np.linalg.norm(p1 - p0))
+                if d <= min_distance:
+                    G.add_edge(u, v)
+                    continue
+                n_seg = int(np.ceil(d / min_distance))
+                n_mid = n_seg - 1
+                prev = u
+                for k in range(1, n_mid + 1):
+                    t = k / n_seg
+                    pk = (1 - t) * p0 + t * p1
+                    new_id2 = max(G.nodes()) + 1
+                    G.add_node(new_id2, coord=pk, ntype=0)
+                    G.add_edge(prev, new_id2)
+                    prev = new_id2
+                G.add_edge(prev, v)
     G = nx_clear_invalid_edges(G)
     return G
 
