@@ -27,26 +27,30 @@ class KeypointMetric:
 
         gold_keypoints, pred_keypoints = [], []
         if "branch" in self.keypoint_types:
-            gold_keypoints.extend(gold.get_branch_swc_list())
-            pred_keypoints.extend(pred.get_branch_swc_list())
+            gold_keypoints.extend(gold.get_branch_nodes())
+            pred_keypoints.extend(pred.get_branch_nodes())
         if "leaf" in self.keypoint_types:
-            gold_keypoints.extend(gold.get_leaf_swc_list())
-            pred_keypoints.extend(pred.get_leaf_swc_list())
+            gold_keypoints.extend(gold.get_leaf_nodes())
+            pred_keypoints.extend(pred.get_leaf_nodes())
         gold_keypoints = nodes2coords(gold_keypoints)
         pred_keypoints = nodes2coords(pred_keypoints)
 
         Ng = len(gold_keypoints)
         Np = len(pred_keypoints)
-
-        cost = np.linalg.norm(
-            pred_keypoints[:, None, :] - gold_keypoints[None, :, :], axis=2
-        )
-        row_ind, col_ind = linear_sum_assignment(cost)
-        matched_dist = cost[row_ind, col_ind]
-        valid = matched_dist < self.threshold_dis
-        TP = valid.sum()
+        
+        if Np == 0:
+            TP = 0
+        else:
+            cost = np.linalg.norm(
+                pred_keypoints[:, None, :] - gold_keypoints[None, :, :], axis=2
+            )
+            row_ind, col_ind = linear_sum_assignment(cost)
+            matched_dist = cost[row_ind, col_ind]
+            valid = matched_dist < self.threshold_dis
+            TP = valid.sum()
         FP = Np - TP
         FN = Ng - TP
+
         precision = TP / Np if Np > 0 else 0
         recall = TP / Ng if Ng > 0 else 0
         f1 = (

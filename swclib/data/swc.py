@@ -1,28 +1,35 @@
 import numpy as np
 from scipy.spatial import cKDTree
+import os
+
+from swclib.data.swc_tree import SwcTree
+from swclib.data.swc_node import nodes2coords
+from swclib.utils.points import cal_segment_length
 
 class Swc(object):
 
-    def __init__(self, file_name):
+    def __init__(self, file_name=None):
         self.nodes = {}
         self.edges = []
         self.bound_box = [0, 0, 0, 0, 0, 0]  # x0,y0,z0,x1,y1,z1
-        self.open(file_name)
+        self.file_name = file_name
+        if file_name is not None:
+            self.open(file_name)
 
     def open(self, file_name):
         with open(file_name) as f:
             for line in f.readlines():
                 if line.startswith("#"):
                     continue
-                if len(line.split())!=7:
+                if len(line.split()) != 7:
                     continue
-                id, type, x, y, z, r, pid = map(float, line.split())
+                id, ntype, x, y, z, r, pid = map(float, line.split())
                 id = int(id)
-                typ = int(type)
+                ntype = int(ntype)
                 pid = int(pid)
                 self.nodes[id] = {
                     "id": id,
-                    "type": type,
+                    "type": ntype,
                     "x": x,
                     "y": y,
                     "z": z,
@@ -44,7 +51,9 @@ class Swc(object):
                     self.bound_box[5] = z
 
     def get_coords(self):
-        return np.array([[node["x"], node["y"], node["z"]] for node in self.nodes.values()])
+        return np.array(
+            [[node["x"], node["y"], node["z"]] for node in self.nodes.values()]
+        )
 
     def rescale(self, scale):
         """
@@ -64,79 +73,319 @@ class Swc(object):
         ]
         return self
 
-    def resample(self, min_distance=2.0):
+    # def resample(self, min_distance=2.0):
+    #     """
+    #     Densify edges so that the distance between adjacent nodes (node-parent chain)
+    #     is <= min_distance by inserting intermediate nodes on long edges.
+    #     """
+    #     if len(self.nodes) == 0:
+    #         return self
+
+    #     next_id = max(self.nodes.keys()) + 1
+
+    #     new_nodes = {}
+    #     new_edges = []
+    #     for nid, node in self.nodes.items():
+    #         new_nodes[nid] = dict(node)
+
+    #     for nid in sorted(self.nodes.keys()):
+    #         node = new_nodes[nid]
+    #         pid = int(node["parent"])
+
+    #         if pid == -1 or pid not in new_nodes:
+    #             new_edges.append((nid, pid))
+    #             continue
+
+    #         parent = new_nodes[pid]
+    #         p = np.array([parent["x"], parent["y"], parent["z"]], dtype=float)
+    #         c = np.array([node["x"], node["y"], node["z"]], dtype=float)
+    #         v = c - p
+    #         dist = float(np.linalg.norm(v))
+    #         if dist <= min_distance or dist == 0.0:
+    #             new_edges.append((nid, pid))
+    #             continue
+
+    #         m = int(np.ceil(dist / float(min_distance)))
+    #         num_insert = max(0, m - 1)
+    #         chain_ids = []
+    #         for k in range(1, num_insert + 1):
+    #             t = k / float(m)
+    #             xyz = p + t * v
+    #             r = float(parent.get("radius", 1.0)) + t * (float(node.get("radius", 1.0)) - float(parent.get("radius", 1.0)))
+
+    #             new_nodes[next_id] = {
+    #                 "id": next_id,
+    #                 "type": 5, # 5 indicates an inserted node
+    #                 "x": float(xyz[0]),
+    #                 "y": float(xyz[1]),
+    #                 "z": float(xyz[2]),
+    #                 "radius": r,
+    #                 "parent": None,  # fill later
+    #             }
+    #             chain_ids.append(next_id)
+    #             next_id += 1
+
+    #         # pid -> chain[0] -> ... -> chain[-1] -> nid
+    #         if chain_ids:
+    #             new_nodes[chain_ids[0]]["parent"] = pid
+    #             new_edges.append((chain_ids[0], pid))
+    #             for a, b in zip(chain_ids[1:], chain_ids[:-1]):
+    #                 new_nodes[a]["parent"] = b
+    #                 new_edges.append((a, b))
+    #             last = chain_ids[-1]
+    #             node["parent"] = last
+    #             new_edges.append((nid, last))
+    #         else:
+    #             new_edges.append((nid, pid))
+    #     self.nodes = new_nodes
+    #     self.edges = new_edges
+    #     xs = [n["x"] for n in self.nodes.values()]
+    #     ys = [n["y"] for n in self.nodes.values()]
+    #     zs = [n["z"] for n in self.nodes.values()]
+    #     self.bound_box = [min(xs), min(ys), min(zs), max(xs), max(ys), max(zs)]
+    #     return self
+
+    def resample(self, min_distance=2.0, in_place=True):
         """
-        Densify edges so that the distance between adjacent nodes (node-parent chain)
-        is <= min_distance by inserting intermediate nodes on long edges.
+        Resample the SWC along each polyline segment (between "key nodes") using
+        approximately uniform spacing = min_distance.
+
+        - Upsample: insert nodes if spacing is too large
+        - Downsample: remove redundant degree-2 nodes if spacing is too small
+        - Topology is preserved by protecting key nodes: root, branch nodes, leaves
         """
         if len(self.nodes) == 0:
             return self
 
+        # -------- Build parent/children adjacency --------
+        parent = {}
+        children = {nid: [] for nid in self.nodes.keys()}
+        roots = []
+        for nid, node in self.nodes.items():
+            pid = int(node["parent"])
+            parent[nid] = pid
+            if pid == -1:
+                roots.append(nid)
+            else:
+                children[pid].append(nid)
+        assert len(roots) > 0
+
+        # A "key node" is where we must keep topology stable:
+        # - root (no valid parent)
+        # - branch (children count != 1)
+        # - leaf (children count == 0)
+        # Note: leaf is already included by children count != 1, but keep explicit for clarity.
+        key_nodes = set()
+        for nid in self.nodes.keys():
+            cdeg = len(children.get(nid, []))
+            pid = parent.get(nid, -1)
+            if pid == -1 or pid not in self.nodes:
+                key_nodes.add(nid)  # root
+            if cdeg == 0:
+                key_nodes.add(nid)  # leaf
+            if cdeg != 1:
+                key_nodes.add(nid)  # branch or leaf
+
         next_id = max(self.nodes.keys()) + 1
 
+        # -------- Helpers --------
+        def _node_xyzr(nid):
+            n = self.nodes[nid]
+            return (
+                np.array([float(n["x"]), float(n["y"]), float(n["z"])], dtype=float),
+                float(n.get("radius", 1.0)),
+            )
+
+        def _resample_polyline(node_ids):
+            """
+            Given a chain of node_ids [start ... end] with start and end being key nodes,
+            resample along arc-length with step=min_distance.
+            Returns a list of tuples: (new_id, xyz, radius, type, old_id_or_None)
+            where old_id_or_None is the original node id if we reused it (start/end),
+            otherwise None for inserted nodes.
+            """
+            nonlocal next_id
+
+            # Collect points and radii along the chain
+            pts = []
+            rs = []
+            types = []
+            for nid in node_ids:
+                p, r = _node_xyzr(nid)
+                pts.append(p)
+                rs.append(r)
+                types.append(int(self.nodes[nid].get("type", 0)))
+            pts = np.stack(pts, axis=0)
+            rs = np.array(rs, dtype=float)
+
+            # Cumulative arc-length
+            seg = np.linalg.norm(pts[1:] - pts[:-1], axis=1)
+            cum = np.concatenate([[0.0], np.cumsum(seg)])
+            total = float(cum[-1])
+
+            # If chain is degenerate
+            if total <= 1e-12:
+                start_id = node_ids[0]
+                end_id = node_ids[-1]
+                out = []
+                out.append((start_id, pts[0], rs[0], types[0], start_id))
+                if end_id != start_id:
+                    out.append((end_id, pts[-1], rs[-1], types[-1], end_id))
+                return out
+
+            # Sample positions: 0, min_distance, 2*min_distance, ..., total
+            # Always include the end.
+            k = int(np.floor(total / float(min_distance)))
+            s_positions = [0.0]
+            for i in range(1, k + 1):
+                s_positions.append(i * float(min_distance))
+            if total - s_positions[-1] > 1e-6:
+                s_positions.append(total)
+            else:
+                # Numerical snap: ensure last is exactly total
+                s_positions[-1] = total
+
+            # Linear interpolation along cum-length
+            out = []
+            start_old = node_ids[0]
+            end_old = node_ids[-1]
+
+            for j, s in enumerate(s_positions):
+                # Find right interval in cum
+                idx = int(np.searchsorted(cum, s, side="right") - 1)
+                idx = max(0, min(idx, len(cum) - 2))
+
+                s0, s1 = float(cum[idx]), float(cum[idx + 1])
+                if s1 - s0 <= 1e-12:
+                    t = 0.0
+                else:
+                    t = (s - s0) / (s1 - s0)
+
+                p = pts[idx] + t * (pts[idx + 1] - pts[idx])
+                r = float(rs[idx] + t * (rs[idx + 1] - rs[idx]))
+
+                if j == 0:
+                    # Reuse start node id
+                    out.append(
+                        (
+                            start_old,
+                            p,
+                            r,
+                            int(self.nodes[start_old].get("type", 0)),
+                            start_old,
+                        )
+                    )
+                elif j == len(s_positions) - 1:
+                    # Reuse end node id
+                    out.append(
+                        (
+                            end_old,
+                            p,
+                            r,
+                            int(self.nodes[end_old].get("type", 0)),
+                            end_old,
+                        )
+                    )
+                else:
+                    # Insert new node
+                    nid_new = next_id
+                    next_id += 1
+                    out.append((nid_new, p, r, 5, None))  # type=5 for inserted node
+
+            return out
+
+        # -------- Rebuild nodes/edges by traversing segments --------
         new_nodes = {}
         new_edges = []
-        for nid, node in self.nodes.items():
-            new_nodes[nid] = dict(node)
 
-        for nid in sorted(self.nodes.keys()):
-            node = new_nodes[nid]
-            pid = int(node["parent"])
+        # We'll traverse from each root, and for every child, build a chain until the next key node.
+        stack = list(roots)
+        visited_key = set()
 
-            if pid == -1 or pid not in new_nodes:
-                new_edges.append((nid, pid))
+        def _ensure_node(nid, xyz, radius, ntype):
+            # Create or overwrite node in new_nodes (overwriting is fine for reused key nodes)
+            new_nodes[nid] = {
+                "id": int(nid),
+                "type": int(ntype),
+                "x": float(xyz[0]),
+                "y": float(xyz[1]),
+                "z": float(xyz[2]),
+                "radius": float(radius),
+                "parent": -1,  # will be set when connecting
+            }
+
+        # Initialize roots in new_nodes (keep their original coordinates/radius)
+        for r in stack:
+            p, rr = _node_xyzr(r)
+            _ensure_node(r, p, rr, int(self.nodes[r].get("type", 0)))
+            new_nodes[r]["parent"] = -1
+            new_edges.append((r, -1))
+
+        # DFS over key nodes; for each outgoing child, resample that segment
+        key_queue = stack[:]
+        while key_queue:
+            start = key_queue.pop()
+            if start in visited_key:
                 continue
+            visited_key.add(start)
 
-            parent = new_nodes[pid]
-            p = np.array([parent["x"], parent["y"], parent["z"]], dtype=float)
-            c = np.array([node["x"], node["y"], node["z"]], dtype=float)
-            v = c - p
-            dist = float(np.linalg.norm(v))
-            if dist <= min_distance or dist == 0.0:
-                new_edges.append((nid, pid))
-                continue
+            for ch in children.get(start, []):
+                # Build chain: start -> ... -> end_key
+                chain = [start]
+                cur = ch
+                while True:
+                    chain.append(cur)
+                    if cur in key_nodes:
+                        end_key = cur
+                        break
+                    # degree-2 interior node must have exactly one child in this direction
+                    nxts = children.get(cur, [])
+                    if len(nxts) != 1:
+                        # Safety: treat as key if something weird happens
+                        end_key = cur
+                        key_nodes.add(cur)
+                        break
+                    cur = nxts[0]
 
-            m = int(np.ceil(dist / float(min_distance)))
-            num_insert = max(0, m - 1)
-            chain_ids = []
-            for k in range(1, num_insert + 1):
-                t = k / float(m)
-                xyz = p + t * v
-                r = float(parent.get("radius", 1.0)) + t * (float(node.get("radius", 1.0)) - float(parent.get("radius", 1.0)))
+                # Resample this polyline segment
+                sampled = _resample_polyline(chain)
 
-                new_nodes[next_id] = {
-                    "id": next_id,
-                    "type": 5, # 5 indicates an inserted node
-                    "x": float(xyz[0]),
-                    "y": float(xyz[1]),
-                    "z": float(xyz[2]),
-                    "radius": r,
-                    "parent": None,  # fill later
-                }
-                chain_ids.append(next_id)
-                next_id += 1
+                # Create nodes + connect parents along sampled list
+                prev_id = None
+                for idx_s, (nid_s, xyz_s, r_s, t_s, old_id) in enumerate(sampled):
+                    if idx_s == 0:
+                        # first is the start key node: parent stays as already set (root or will be set by its own segment)
+                        # But if it wasn't initialized (non-root key), keep original parent if it exists later; for now leave as is.
+                        pass
+                    else:
+                        # set parent to prev_id
+                        _ensure_node(nid_s, xyz_s, r_s, t_s)
+                        new_nodes[nid_s]["parent"] = int(prev_id)
+                        new_edges.append((nid_s, int(prev_id)))
 
-            # pid -> chain[0] -> ... -> chain[-1] -> nid
-            if chain_ids:
-                new_nodes[chain_ids[0]]["parent"] = pid
-                new_edges.append((chain_ids[0], pid))
-                for a, b in zip(chain_ids[1:], chain_ids[:-1]):
-                    new_nodes[a]["parent"] = b
-                    new_edges.append((a, b))
-                last = chain_ids[-1]
-                node["parent"] = last
-                new_edges.append((nid, last))
-            else:
-                new_edges.append((nid, pid))
-        self.nodes = new_nodes
-        self.edges = new_edges
-        xs = [n["x"] for n in self.nodes.values()]
-        ys = [n["y"] for n in self.nodes.values()]
-        zs = [n["z"] for n in self.nodes.values()]
-        self.bound_box = [min(xs), min(ys), min(zs), max(xs), max(ys), max(zs)]
-        return self
-        
+                    prev_id = nid_s
 
+                # Push the end key node for further traversal
+                end_id = sampled[-1][0]
+                if end_id in key_nodes:
+                    key_queue.append(end_id)
+
+        xs = [n["x"] for n in new_nodes.values()]
+        ys = [n["y"] for n in new_nodes.values()]
+        zs = [n["z"] for n in new_nodes.values()]
+        bound_box = [min(xs), min(ys), min(zs), max(xs), max(ys), max(zs)]
+
+        if in_place:
+            self.nodes = new_nodes
+            self.edges = new_edges
+            self.bound_box = bound_box
+            return self
+        else:
+            new_swc = Swc()
+            new_swc.nodes = new_nodes
+            new_swc.edges = new_edges
+            new_swc.bound_box = bound_box
+            return new_swc
 
     def get_father_path(self, nid, step=5):
         path = []
@@ -145,15 +394,21 @@ class Swc(object):
             path.append(current_id)
             if len(path) >= step:
                 break
-            current_id = self.nodes[current_id]['parent']
+            current_id = self.nodes[current_id]["parent"]
         return path
 
     def check_min_distance_between_non_adjacent_nodes(self, threshold=5.0):
+        """
+        Check the minimum distance between non-adjacent nodes in the SWC structure.
+        Returns the minimum distance found and the list of node ID pairs that are within the threshold.
+        """
         n = len(self.nodes)
         if n < 3:
             return np.inf, []
-        id2idx = {idx:node_id for idx, node_id in enumerate(self.nodes.keys())}
-        coords = [[node['x'], node['y'], node['z']] for node_id, node in self.nodes.items()]
+        id2idx = {idx: node_id for idx, node_id in enumerate(self.nodes.keys())}
+        coords = [
+            [node["x"], node["y"], node["z"]] for node_id, node in self.nodes.items()
+        ]
         tree = cKDTree(coords)
 
         min_dist = np.inf
@@ -178,5 +433,203 @@ class Swc(object):
                 if dist < min_dist:
                     min_dist = dist
         return min_dist, matched_pair
-                
 
+    def get_density(self, dis=10.0, p=0.3, exclude_hops=1):
+        """
+        Compute swc density.
+
+        Parameters
+        ----------
+        dis : float
+            Resampling distance (also controls point spacing after resample).
+        in_place : bool
+            Whether resampling modifies self in-place.
+        exclude_hops : int
+            Topological exclusion radius in hops.
+            - 1 means exclude only direct neighbors (parent/child).
+            - 2 means also exclude neighbors within 2 hops, etc.
+        Returns: float, density value
+        -------
+
+        """
+        swc = self.resample(min_distance=dis, in_place=False)
+    
+        swc_tree = SwcTree(swc)
+        components = swc_tree.get_components()
+
+        coords, node_ids = [], []
+        for comp in components:
+            if len(comp) <= 2+exclude_hops:
+                continue
+            coord = nodes2coords(comp)
+            coords.append(coord)
+            node_ids.extend([node.nid for node in comp])
+        if len(coords) == 0:
+            return 0.0
+        coords = np.vstack(coords)
+        id2idx = {nid: i for i, nid in enumerate(node_ids)}
+
+        n = len(coords)
+        if n <= 2 + exclude_hops:
+            return 0.0
+
+        tree = cKDTree(coords)
+
+        # -------- Build adjacency (undirected) for hop-based exclusion --------
+        # edges are stored as (id, pid); ignore pid = -1 or missing.
+        adj = {nid: set() for nid in node_ids}
+        for nid, pid in swc.edges:
+            if nid not in node_ids:
+                continue
+            if pid == -1:
+                continue
+            if nid not in swc.nodes or pid not in swc.nodes:
+                continue
+            adj[nid].add(pid)
+            adj[pid].add(nid)
+
+        def _excluded_set(start_nid, hops):
+            """
+            Nodes to exclude from nearest-neighbor search: within <=hops topological steps.
+            hops=1 -> {parent/child + self}
+            """
+            if hops <= 0:
+                return {start_nid}
+            seen = {start_nid}
+            frontier = {start_nid}
+            for _ in range(hops):
+                new_frontier = set()
+                for u in frontier:
+                    for v in adj.get(u, ()):
+                        if v not in seen:
+                            seen.add(v)
+                            new_frontier.add(v)
+                frontier = new_frontier
+                if not frontier:
+                    break
+            return seen
+
+        # Precompute excluded sets if you want speed; for hop=1 it's cheap anyway.
+        # For large n and larger exclude_hops, you may want to cache or limit.
+        excluded_cache = {}
+        if exclude_hops <= 1:
+            # Fast path: exclude only direct neighbors + self
+            for nid in node_ids:
+                s = {nid}
+                s |= adj.get(nid, set())
+                excluded_cache[nid] = s
+        else:
+            for nid in node_ids:
+                excluded_cache[nid] = _excluded_set(nid, exclude_hops)
+
+        # -------- For each node, find nearest valid (non-excluded) neighbor --------
+        dlist = []
+
+        # Start with a small k and expand if needed
+        k0 = min(16, n)
+        for nid in node_ids:
+            idx0 = id2idx[nid]
+            excluded = excluded_cache[nid]
+            if len(excluded) == n:
+                # all nodes are excluded (rare: tiny component)
+                continue
+
+            k = k0
+            found = None
+
+            while True:
+                # query k nearest (includes itself at rank 0)
+                dists, idxs = tree.query(coords[idx0], k=k)
+
+                # Make them iterable even when k==1
+                if np.isscalar(dists):
+                    dists = np.array([dists])
+                    idxs = np.array([idxs])
+
+                # Scan candidates in increasing distance
+                for dist, j in zip(dists, idxs):
+                    cand_nid = node_ids[int(j)]
+                    if cand_nid in excluded:
+                        continue
+                    found = float(dist)
+                    break
+
+                if found is not None:
+                    break
+
+                if k >= n:
+                    break  # no valid match exists (rare: tiny component)
+                k = min(n, k * 2)
+            assert found is not None
+            dlist.append(found)
+
+        dlist = np.sort(dlist)
+        dlist = dlist[:-int(len(dlist)*p)]
+        mean_dist = float(np.mean(dlist))
+        density = np.clip(1 - mean_dist/(dis*exclude_hops*2), 0.0, 1.0)
+        return float(density)
+    
+    def save_to_swc(
+            self,
+            out_path: str,
+            *,
+            sort_by_id: bool = True,
+            write_header: bool = True,
+            float_fmt: str = ".6f",
+            mkdir: bool = True,
+        ) -> str:
+            """
+            Export current SWC to a .swc text file.
+
+            Parameters
+            ----------
+            out_path : str
+                Output SWC path.
+            sort_by_id : bool
+                Whether to sort nodes by node id before writing.
+            write_header : bool
+                Whether to write SWC header lines.
+            default_type : int
+                Default SWC type if missing.
+            default_radius : float
+                Default radius if missing.
+            float_fmt : str
+                Format for floats, e.g. ".3f", ".6f".
+            mkdir : bool
+                Create parent directory if missing.
+
+            Returns
+            -------
+            str
+                The output path.
+            """
+            if mkdir:
+                os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+
+            # Choose node order
+            node_ids = list(self.nodes.keys())
+            if sort_by_id:
+                node_ids.sort()
+
+            with open(out_path, "w", encoding="utf-8") as f:
+                if write_header:
+                    f.write("# Exported by Swc.save_to_swc\n")
+                    f.write("# id type x y z radius parent\n")
+
+                for nid in node_ids:
+                    n = self.nodes[nid]
+                    ntype_i = int(n['type'])
+                    x = float(n['x'])
+                    y = float(n['y'])
+                    z = float(n['z'])
+                    r = float(n['radius'])
+                    pid = int(n['parent'])
+
+                    # SWC format: id type x y z r parent
+                    f.write(
+                        f"{nid} {ntype_i} "
+                        f"{format(x, float_fmt)} {format(y, float_fmt)} {format(z, float_fmt)} "
+                        f"{format(r, float_fmt)} {pid}\n"
+                    )
+
+            return out_path

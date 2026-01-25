@@ -29,6 +29,16 @@ class SSDMetric:
         gt_coords = gold.get_coords()
         pred_coords = pred.get_coords()
 
+        if len(pred_coords)==0:
+            return {
+                "sd": None,
+                "sd_gt2pred": None,
+                "sd_pred2gt": None,
+                "ssd": None,
+                "ssd_gt2pred": None,
+                "ssd_pred2gt": None,
+            }
+
         # pred->gold
         tree_gt = cKDTree(gt_coords)
         dists_gt2pred, _ = tree_gt.query(pred_coords, k=1)

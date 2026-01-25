@@ -26,3 +26,9 @@ def sample_points_from_point_pair(p0, p1, step=1):
     ts = np.linspace(0, n_steps * step / L, n_steps + 1)
     points = p0 + np.outer(ts, (p1 - p0))
     return points
+
+def cal_segment_length(points):
+    points = np.asarray(points)
+    diffs = np.diff(points, axis=0)
+    seg_lens = np.linalg.norm(diffs, axis=1)
+    return np.sum(seg_lens)

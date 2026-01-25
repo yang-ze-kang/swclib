@@ -5,6 +5,7 @@ import queue
 import numpy as np
 from anytree import iterators, PreOrderIter
 import miniball
+from typing import TYPE_CHECKING
 
 from swclib.data.swc_node import SwcNode
 from swclib.data.swc_soma import SwcSoma
@@ -52,7 +53,7 @@ class SwcTree:
     For simplicity, we always assume that the root is a virtual node.
     """
 
-    def __init__(self, path=None):
+    def __init__(self, swc=None):
         self.root = Make_Virtual()
         self._size = None
         self._total_length = None
@@ -66,8 +67,11 @@ class SwcTree:
         self.node_list = None
         self.id_node_dict = None
 
-        if path is not None:
-            self.load(path)
+        from swclib.data.swc import Swc
+        if isinstance(swc, (str, os.PathLike)):
+            self.load(swc)
+        elif isinstance(swc, Swc):
+            self.load_from_swc(swc)
 
     def __contains__(self, nid):
         return nid in self.id_set
@@ -75,6 +79,13 @@ class SwcTree:
     def size(self):
         self._size = len(self.id_set)
         return self._size
+    
+    def get_edge_num(self):
+        edges = 0
+        for node in self.get_node_list():
+            if not node.is_virtual() and not node.parent.is_virtual():
+                edges += 1
+        return edges
 
     def name(self):
         return self._name
@@ -137,6 +148,54 @@ class SwcTree:
         with open(path, "r") as fp:
             lines = fp.readlines()
             self.load_list(lines)
+
+    def load_from_swc(self, swc):
+        """
+        Build SwcTree from an in-memory Swc object.
+        """
+        self.clear()
+        self._name = swc.file_name
+
+        nodeDict = {}
+
+        # 1) Create all nodes
+        for nid, rec in swc.nodes.items():
+            # Flexible field mapping
+            _nid = int(rec.get("id", nid))
+            _type = int(rec.get("type", rec.get("ntype", 0)))
+            _x = float(rec.get("x"))
+            _y = float(rec.get("y"))
+            _z = float(rec.get("z"))
+            _r = float(rec.get("radius", rec.get("radius", 0.0)))
+            _pid = int(rec.get("parent", rec["parent"]))
+
+            if _nid in self.id_set:
+                raise Exception(f"[Error: SwcTree.load_from_swc] Same id {_nid}")
+
+            self.id_set.add(_nid)
+            tn = SwcNode(
+                nid=_nid,
+                ntype=_type,
+                radius=_r,
+                coord=EuclideanPoint3D([_x, _y, _z]),
+            )
+            nodeDict[_nid] = (tn, _pid)
+
+        # 2) Link parents
+        for _nid, (tn, parentId) in nodeDict.items():
+            if parentId == -1:
+                tn.parent = self.root
+            else:
+                tn.parent = nodeDict[parentId][0]
+
+        # 3) Precompute root_length
+        for node in self.get_node_list(update=True):
+            if node.parent is None:
+                continue
+            if node.parent.nid != -1:
+                node.root_length = node.parent.root_length + node.parent_distance()
+
+        return self
 
     def rescale(self, scale):
         self.scale = scale
@@ -400,7 +459,7 @@ class SwcTree:
             self.id_node_dict[node.nid] = node
         return self.id_node_dict
 
-    def get_branch_swc_list(self):
+    def get_branch_nodes(self):
         """
         get branch nodes (link to more than 3 nodes) of swc tree
         """
@@ -413,7 +472,7 @@ class SwcTree:
                 branch_list.append(node)
         return branch_list
 
-    def get_leaf_swc_list(self):
+    def get_leaf_nodes(self):
         swc_list = self.get_node_list()
         leaf_list = []
         for node in swc_list:
@@ -425,37 +484,6 @@ class SwcTree:
             if len(node.children) == 0:
                 leaf_list.append(node)
         return leaf_list
-
-    def set_node_type_by_topo(self, root_id=1):
-        """
-        root_id decide other nodes' id
-        branch = root_id + 1
-        leaf = root_id + 3
-        normal node = root_id + 2
-        """
-        swc_list = self.get_node_list()
-        for node in swc_list:
-            if node.is_virtual():
-                continue
-            if node.parent.nid == -1:
-                node.ntype = root_id
-            elif len(node.children) > 1:
-                node.ntype = root_id + 1
-            elif len(node.children) == 1:
-                node.ntype = root_id + 2
-            else:
-                node.ntype = root_id + 3
-
-    def break_branches(self):
-        breaked_tree = self.get_copy()
-        branch_list = breaked_tree.get_branch_swc_list()
-        for branch in branch_list:
-            if branch.is_virtual():
-                continue
-            for branch_son in branch.children:
-                breaked_tree.unlink_child(branch_son)
-        breaked_tree.get_node_list(update=True)
-        return breaked_tree
 
     def get_somas(self):
         """The soma labeled as 1. The area near the soma is annotated with straight lines. It is assumed that the soma is a sphere."""
@@ -527,7 +555,7 @@ class SwcTree:
 
     def get_fibers(self, only_from_soma=False):
         fibers = []
-        leaf_nodes = self.get_leaf_swc_list()
+        leaf_nodes = self.get_leaf_nodes()
         for node in leaf_nodes:
             fiber = SwcFiber()
             while node != self.root:
@@ -542,12 +570,8 @@ class SwcTree:
         return fibers
     
     def get_components(self):
-        """
-        获取连通分量
-        Return: list of node list.
-        """
         components = []
-        for child in self.root.children():
+        for child in self.root.children:
             component = []
             for node in PreOrderIter(child):
                 component.append(node)

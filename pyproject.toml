@@ -11,7 +11,8 @@ dependencies = [
   "anytree",
   "miniball",
   "scipy",
-  "networkx"
+  "networkx",
+  "rtree"
 ]
 
 [tool.setuptools.packages.find]

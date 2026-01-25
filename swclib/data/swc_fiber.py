@@ -3,13 +3,6 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 
-def cal_segment_length(points):
-    points = np.asarray(points)
-    diffs = np.diff(points, axis=0)
-    seg_lens = np.linalg.norm(diffs, axis=1)
-    return np.sum(seg_lens)
-
-
 def resample_nodes_by_distance(nodes, distance=2):
     nodes = np.asarray(nodes)
     diffs = np.diff(nodes, axis=0)

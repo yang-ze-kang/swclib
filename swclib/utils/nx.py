@@ -1,7 +1,30 @@
 import networkx as nx
 from pathlib import Path
 
-from swclib.data.swc import Swc
+def read_swc(file_name):
+    nodes = {}
+    edges = []
+    with open(file_name) as f:
+        for line in f.readlines():
+            if line.startswith("#"):
+                continue
+            if len(line.split()) != 7:
+                continue
+            id, ntype, x, y, z, r, pid = map(float, line.split())
+            id = int(id)
+            ntype = int(ntype)
+            pid = int(pid)
+            nodes[id] = {
+                "id": id,
+                "type": ntype,
+                "x": x,
+                "y": y,
+                "z": z,
+                "radius": r,
+                "parent": pid,
+            }
+            edges.append((id, pid))
+    return nodes, edges
 
 def nx_clear_invalid_edges(G: nx.Graph):
     valid_nodes = set(G.nodes())
@@ -13,15 +36,14 @@ def nx_clear_invalid_edges(G: nx.Graph):
 
 def nx_swc_to_grpah(swc_path, scale=(1.0, 1.0, 1.0)):
     if isinstance(swc_path, str) or isinstance(swc_path, Path):
-        swc = Swc(swc_path)
-    assert isinstance(swc, Swc)
+        nodes, edges = read_swc(swc_path)
     G = nx.Graph()
 
-    for nid in swc.nodes:
-        node = swc.nodes[nid]
+    for nid in nodes:
+        node = nodes[nid]
         swc_node = tuple([node["x"]*scale[0], node["y"]*scale[1], node["z"]*scale[2]])
         G.add_node(nid, coord=swc_node, ntype=0)
-    for edge in swc.edges:
+    for edge in edges:
         if edge[1]!=-1:
             G.add_edge(edge[0], edge[1])
     return G
