@@ -1,10 +1,143 @@
 import numpy as np
 from scipy.spatial import cKDTree
 import os
+from copy import deepcopy
+import math
 
 from swclib.data.swc_tree import SwcTree
 from swclib.data.swc_node import nodes2coords
 from swclib.utils.points import cal_segment_length
+
+
+def merge_swcs(swcs, *, offsets=None, keep_file_name=True):
+    """
+    Merge a list of Swc objects into a single Swc.
+
+    Args:
+        swcs: list[Swc]
+        offsets: None or list[tuple[float,float,float]]
+                 If provided, offsets[i] will be added to xyz of swcs[i].
+        keep_file_name: if True, keep merged.file_name = None (or join names yourself).
+
+    Returns:
+        Swc: merged swc with re-indexed node ids and fixed parent links.
+    """
+    merged = Swc(file_name=None)
+
+    if offsets is None:
+        offsets = [(0.0, 0.0, 0.0)] * len(swcs)
+    if len(offsets) != len(swcs):
+        raise ValueError(f"offsets length {len(offsets)} != swcs length {len(swcs)}")
+
+    # ---- helpers: adapt these to your node structure ----
+    def get_id(node):
+        # node can be dict: node["id"]
+        # or object: node.id
+        return node["id"] if isinstance(node, dict) else node.id
+
+    def set_id(node, new_id):
+        if isinstance(node, dict):
+            node["id"] = new_id
+        else:
+            node.id = new_id
+
+    def get_parent(node):
+        # parent id: -1 for root
+        return node["parent"] if isinstance(node, dict) else node.parent
+
+    def set_parent(node, new_parent):
+        if isinstance(node, dict):
+            node["parent"] = new_parent
+        else:
+            node.parent = new_parent
+
+    def get_xyz(node):
+        # return x,y,z
+        if isinstance(node, dict):
+            return float(node["x"]), float(node["y"]), float(node["z"])
+        return float(node.x), float(node.y), float(node.z)
+
+    def set_xyz(node, x, y, z):
+        if isinstance(node, dict):
+            node["x"], node["y"], node["z"] = x, y, z
+        else:
+            node.x, node.y, node.z = x, y, z
+
+    # -----------------------------------------------------
+
+    next_id = 1
+    all_edges = []
+
+    # bbox init
+    minx = miny = minz = math.inf
+    maxx = maxy = maxz = -math.inf
+
+    for swc, (ox, oy, oz) in zip(swcs, offsets):
+        if swc is None:
+            continue
+
+        # old_id -> new_id
+        id_map = {}
+
+        # 1) copy nodes with new ids
+        # assume swc.nodes is dict[id] = node
+        for old_id in sorted(swc.nodes.keys()):
+            node = deepcopy(swc.nodes[old_id])
+
+            new_id = next_id
+            next_id += 1
+            id_map[old_id] = new_id
+            set_id(node, new_id)
+
+            # apply offset
+            x, y, z = get_xyz(node)
+            x, y, z = x + ox, y + oy, z + oz
+            set_xyz(node, x, y, z)
+
+            # bbox update
+            minx, miny, minz = min(minx, x), min(miny, y), min(minz, z)
+            maxx, maxy, maxz = max(maxx, x), max(maxy, y), max(maxz, z)
+
+            merged.nodes[new_id] = node
+
+        # 2) fix parent links
+        for old_id in sorted(swc.nodes.keys()):
+            node_new = merged.nodes[id_map[old_id]]
+            old_parent = get_parent(swc.nodes[old_id])
+
+            if old_parent is None or int(old_parent) < 0:
+                set_parent(node_new, -1)
+            else:
+                # if parent not in nodes (broken swc), treat as root
+                if old_parent not in id_map:
+                    raise NotImplementedError("broken SWC with missing parent")
+                    set_parent(node_new, -1)
+                else:
+                    set_parent(node_new, id_map[old_parent])
+
+        # 3) rebuild edges (or map existing edges)
+        # safer: rebuild from parent pointers
+        for old_id in sorted(swc.nodes.keys()):
+            old_parent = get_parent(swc.nodes[old_id])
+            if old_parent is None or int(old_parent) < 0:
+                continue
+            if old_parent not in id_map:
+                raise NotImplementedError("broken SWC with missing parent")
+                continue
+            all_edges.append((id_map[old_id], id_map[old_parent]))
+
+    merged.edges = all_edges
+
+    # finalize bbox
+    if minx is math.inf:
+        merged.bound_box = [0, 0, 0, 0, 0, 0]
+    else:
+        merged.bound_box = [minx, miny, minz, maxx, maxy, maxz]
+
+    if keep_file_name:
+        merged.file_name = None
+
+    return merged
 
 class Swc(object):
 
