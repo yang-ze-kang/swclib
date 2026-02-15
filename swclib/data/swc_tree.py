@@ -6,46 +6,29 @@ import numpy as np
 from anytree import iterators, PreOrderIter
 import miniball
 from typing import TYPE_CHECKING
+from scipy.spatial import KDTree
+import copy
+from collections import deque
 
-from swclib.data.swc_node import SwcNode
+from swclib.data.swc_node import SwcNode, nodes2coords
 from swclib.data.swc_soma import SwcSoma
 from swclib.data.swc_fiber import SwcFiber
 from swclib.data.euclidean_point import EuclideanPoint3D
 from swclib.utils.points import *
 
 
+def _nodemixin_neighbors(node):
+    """Return undirected neighbors for a NodeMixin node: parent + children."""
+    nbrs = []
+    p = getattr(node, "parent", None)
+    if p is not None:
+        nbrs.append(p)
+    nbrs.extend(list(getattr(node, "children", ())))
+    return nbrs
+
+
 def Make_Virtual():
     return SwcNode(nid=-1, coord=EuclideanPoint3D([0, 0, 0]))
-
-
-def get_nearby_swc_node_list(gold_node, test_kdtree, test_pos_node_dict, threshold):
-    """
-    find all nodes in "test_swc_list" which are close enough to "gold_node"
-    sort them by distance
-
-    :param gold_node: swc_node
-    :param test_swc_list:
-    :param threshold:
-    :return:
-    """
-    if gold_node.is_virtual():
-        return
-    tmp_list = []
-    # find the closest pos for gold node
-    target_pos_list = test_kdtree.search_knn(list(gold_node.get_center_as_tuple()), k=5)
-    for pos in target_pos_list:
-        target_node = test_pos_node_dict[tuple(pos[0].data)]
-        if target_node.is_virtual() or gold_node.is_virtual():
-            continue
-        # only if gold and test nodes are very close(dis < 0.03), they can be considered as the same pos
-        if gold_node.distance(target_node) < threshold:
-            tmp_list.append(tuple([target_node, target_node.distance(gold_node)]))
-
-    tmp_list.sort(key=lambda x: x[1])
-    res_list = []
-    for tu in tmp_list:
-        res_list.append(tu[0])
-    return res_list
 
 
 class SwcTree:
@@ -60,7 +43,7 @@ class SwcTree:
         self._name = None
         self.scale = (1.0, 1.0, 1.0)
 
-        self.id_set = set()
+        self.id_set = set() # all nodes has unique id.
         self.depth_array = None
         self.LOG_NODE_NUM = None
         self.lca_parent = None
@@ -92,6 +75,7 @@ class SwcTree:
 
     def clear(self):
         self.root = Make_Virtual()
+        self.id_set = set()
 
     # warning: slow, don't use in loop
     def node_from_id(self, nid):
@@ -262,92 +246,9 @@ class SwcTree:
                 v = lca_parent[v][k]
         return lca_parent[u][0]
 
-    def align_roots(self, gold_tree, matches, DEBUG=False):
-        offset = EuclideanPoint3D()
-        stack = queue.LifoQueue()
-        swc_test_list = self.get_node_list()
-
-        for root in gold_tree.root.children:
-            gold_anchor = np.array(root._pos)
-            if root in matches.keys():
-                test_anchor = np.array(matches[root]._pos)
-            else:
-                nearby_nodes = get_nearby_swc_node_list(
-                    gold_node=root,
-                    test_swc_list=swc_test_list,
-                    threshold=root.radius() / 2,
-                )
-                if len(nearby_nodes) == 0:
-                    continue
-                test_anchor = nearby_nodes[0]._pos
-
-            offset._pos = (test_anchor - gold_anchor).tolist()
-            if DEBUG:
-                print(
-                    "off_set:x = {}, y = {}, z = {}".format(
-                        offset._pos[0], offset._pos[1], offset._pos[2]
-                    )
-                )
-
-            stack.put(root)
-            while not stack.empty():
-                node = stack.get()
-                if node.is_virtual():
-                    continue
-
-                node._pos[0] += offset._pos[0]
-                node._pos[1] += offset._pos[1]
-                node._pos[2] += offset._pos[2]
-
-                for son in node.children:
-                    stack.put(son)
-
-    def change_root(self, new_root_id):
-        stack = queue.LifoQueue()
-        swc_list = self.get_node_list()
-        list_size = max(self.id_set)
-        vis_list = np.zeros(shape=(list_size + 10))
-        pa_list = [None] * (list_size + 10)
-
-        for node in swc_list:
-            pa_list[node.nid] = node.parent
-        new_root = self.node_from_id(new_root_id)
-
-        stack.put(new_root)
-        pa_list[new_root_id] = self.root
-        while not stack.empty():
-            cur_node = stack.get()
-            vis_list[cur_node.nid] = True
-            for son in cur_node.children:
-                if not vis_list[son.nid]:
-                    stack.put(son)
-                    pa_list[son.nid] = cur_node
-            if (
-                cur_node.parent is not None
-                and cur_node.parent.nid != -1
-                and not vis_list[cur_node.parent.nid]
-            ):
-                stack.put(cur_node.parent)
-                pa_list[cur_node.parent.nid] = cur_node
-
-        for i in range(1, len(swc_list)):
-            swc_list[i].parent = None
-        for i in range(1, len(swc_list)):
-            swc_list[i].parent = pa_list[swc_list[i].nid]
-
-    def type_clear(self, col=0, rt_color=2):
-        node_list = self.get_node_list()
-        for node in node_list:
-            node._type = col
-        for root in self.root.children:
-            root._type = rt_color
-
-    def radius_limit(self, x):
-        node_list = self.get_node_list()
-        for node in node_list:
-            node._radius /= x
-
     def next_id(self):
+        if len(self.id_set) == 0:
+            return 1
         return max(self.id_set) + 1
 
     # use this function if son is a new node
@@ -368,6 +269,14 @@ class SwcTree:
         if not isinstance(pa, SwcNode) or not isinstance(son, SwcNode):
             return False
         son.parent = pa
+        for node in PreOrderIter(son):
+            if node.nid in self.id_set:
+                raise Exception(
+                    "[Error: SwcTree.link_child]Node id {} already exists".format(
+                        node.nid
+                    )
+                )
+            self.id_set.add(node.nid)
         return True
 
     def remove_node(self, node):
@@ -552,6 +461,13 @@ class SwcTree:
         if out_path is not None:
             self.save_to_file(out_path)
         return self
+    
+    def get_roots(self, return_coords=False):
+        roots = []
+        for child in self.root.children:
+            roots.append(child)
+        roots = nodes2coords(roots) if return_coords else roots
+        return roots
 
     def get_fibers(self, only_from_soma=False):
         fibers = []
@@ -569,6 +485,78 @@ class SwcTree:
                     fibers.append(fiber)
         return fibers
     
+    def get_rerooted_tree(self, new_root_old, nid_start=1):
+        # --- 1) Collect all nodes in the original connected component (the whole tree) ---
+        # We can reach all nodes by going to the original root then iterating descendants,
+        # but we can also build adjacency on the fly by BFS from new_root_old.
+        # Here we BFS using "undirected" neighbors: parent + children.
+        q = deque([new_root_old])
+        parent_old = {new_root_old: None}
+        old_nodes = []  # BFS order in old graph
+        while q:
+            node = q.popleft()
+            if node in old_nodes:
+                continue
+            old_nodes.append(node)
+
+            if not node.parent.is_virtual():
+                if node.parent not in parent_old:
+                    q.append(node.parent)
+                    parent_old[node.parent] = node
+            
+            for c in node.children:
+                if c not in parent_old:
+                    q.append(c)
+                    parent_old[c] = node
+
+        # --- 2) Create new nodes (one-to-one mapping), without linking parents yet ---
+        old2new = {}
+        for old in old_nodes:
+            new = SwcNode(
+                nid=nid_start,
+                ntype=old.ntype,
+                coord=copy.deepcopy(old.coord),
+                radius=old.radius,
+            )
+            old2new[old] = new
+            nid_start += 1        
+
+        # Link new nodes by the parent map
+        for child_old, p_old in parent_old.items():
+            child_new = old2new[child_old]
+            if p_old is not None:
+                child_new.parent = old2new[p_old]
+
+        return old2new[new_root_old], set(old_nodes)
+    
+    def align_roots(self, root_coords, align_roots_thredhold=20.0):
+        # find new roots
+        new_roots = []
+        nodes, node_coords = self.get_node_list(), nodes2coords(self.get_node_list())
+        kdTree = KDTree(node_coords)
+        for rc in root_coords:
+            dist, idx = kdTree.query(rc)
+            if dist <= align_roots_thredhold:
+                new_roots.append(nodes[idx])
+        new_roots = list(set(new_roots))
+
+        # build new tree with new roots
+        swc = SwcTree()
+        vis = set()
+        for root in new_roots:
+            new_root, visited = self.get_rerooted_tree(root, nid_start=swc.next_id())
+            swc.link_child(swc.root, new_root)
+            vis |= visited
+        
+        # add remaining components (if any) as separate trees under the virtual root
+        for node in self.root.children:
+            if node not in vis:
+                new_root, visited = self.get_rerooted_tree(node, nid_start=swc.next_id())
+                swc.link_child(swc.root, new_root)
+                vis |= visited
+        return swc
+            
+
     def get_components(self):
         components = []
         for child in self.root.children:

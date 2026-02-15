@@ -26,6 +26,8 @@ default_metric_params = {
         "iou_threshold": 0.8,
         "dist_threshold": 5,
         "dist_sample": 1.0,
+        "align_roots": True,
+        "align_roots_thredhold": 20.0,
         "scale": (1.0, 1.0, 1.0),
     },
 }

@@ -13,12 +13,16 @@ class FiberMetric:
         iou_threshold=0.8,
         dist_threshold=5,
         dist_sample=1.0,
+        align_roots=False,
+        align_roots_thredhold=20.0,
         scale=(1.0, 1.0, 1.0),
         only_from_soma=False,
     ):
         self.iou_threshold = iou_threshold
         self.dist_threshold = dist_threshold
         self.dist_sample = dist_sample
+        self.align_roots = align_roots
+        self.align_roots_thredhold = align_roots_thredhold
         self.scale = scale
         self.only_from_soma = only_from_soma
 
@@ -29,6 +33,12 @@ class FiberMetric:
             pred = SwcTree(pred)
         assert isinstance(pred, SwcTree)
         assert isinstance(pred, SwcTree)
+        # align roots if needed
+        if self.align_roots:
+            roots = gold.get_roots(return_coords=True)
+            pred = pred.align_roots(roots, align_roots_thredhold=self.align_roots_thredhold)
+
+        # rescale to physical units
         gold.rescale(self.scale)
         pred.rescale(self.scale)
 
