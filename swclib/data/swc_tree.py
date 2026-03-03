@@ -186,6 +186,14 @@ class SwcTree:
         for node in self.get_node_list():
             for i in range(3):
                 node.coord[i] = node.coord[i] * scale[i]
+    
+    def relocation(self, offset):
+        """
+        offset: (x_offset, y_offset, z_offset)
+        """
+        for node in self.get_node_list():
+            for i in range(3):
+                node.coord[i] = node.coord[i] + offset[i]
 
     def length(self, force_update=False):
         if self._total_length is not None and force_update == False:
