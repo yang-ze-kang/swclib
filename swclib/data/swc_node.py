@@ -3,6 +3,9 @@ from anytree import NodeMixin, RenderTree, iterators
 from typing import List
 from dataclasses import dataclass, field
 import numpy as np
+from collections import deque
+import copy
+import queue
 
 from swclib.data.euclidean_point import EuclideanPoint3D
 
@@ -105,6 +108,13 @@ class SwcNode(NodeMixin):
     def is_regular(self):
         """Returns True iff the node is NOT virtual."""
         return self.nid >= 0
+    
+    def is_in_roi(self, roi):
+        """Returns True iff the node is in the given roi."""
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = roi
+        return (xmin <= self.coord[0] <= xmax and
+                ymin <= self.coord[1] <= ymax and
+                zmin <= self.coord[2] <= zmax)
 
     def distance(self, tn=None, mode=_3D):
         """Returns the distance to another node.
@@ -122,6 +132,9 @@ class SwcNode(NodeMixin):
             if mode == _2D:
                 return self.coord.distance_to_point_2d(tn.coord)
             return self.coord.distance(tn.coord)
+        
+        if isinstance(tn, list) and len(tn) == 3:
+            tn = EuclideanPoint3D(tn)
 
         # euc node is also acceptable
         if isinstance(tn, EuclideanPoint3D):
@@ -156,3 +169,123 @@ class SwcNode(NodeMixin):
             str(self.coord),
             self.radius,
         )
+    
+    ## --- Below are subtree properties with self as root --- ##
+    def get_subtree_node_list(self):
+        node_list = []
+        q = queue.LifoQueue()
+        q.put(self)
+        while not q.empty():
+            cur = q.get()
+            node_list.append(cur)
+            for child in cur.children:
+                q.put(child)
+        return node_list
+    
+    def get_subtree_length(self, force_update=False):
+        node_list = self.get_subtree_node_list()
+        result = 0
+        for tn in node_list:
+            if tn is None or tn.parent is None or tn.is_virtual() or tn.parent.is_virtual():
+                continue
+            result += tn.parent_distance()
+        return result
+    
+    def get_subtree_leafs(self):
+        leafs = []
+        q = queue.LifoQueue()
+        q.put(self)
+        while not q.empty():
+            cur = q.get()
+            if len(cur.children) == 0:
+                leafs.append(cur)
+            for child in cur.children:
+                q.put(child)
+        return leafs
+    
+    def get_subtree_fibers(self, roi=None, with_root=False):
+        from swclib.data.swc_fiber import SwcFiber
+        fibers = []
+        leafs = self.get_subtree_leafs()
+        for node in leafs:
+            fiber = SwcFiber()
+            while node != self:
+                fiber.append(node)
+                node = node.parent
+            if with_root and len(fiber) > 0:
+                fiber.append(self)
+            fiber.reverse()
+            if len(fiber) > 1 and fiber not in fibers:
+                fibers.append(fiber)
+        if roi is not None:
+            new_fibers = []
+            for fiber in fibers:
+                new_fiber = SwcFiber()
+                for node in fiber:
+                    if node.is_in_roi(roi):
+                        new_fiber.append(node)
+                    else:
+                        break
+                if len(new_fiber) > 1 and new_fiber not in new_fibers:
+                    new_fibers.append(new_fiber)
+            fibers = new_fibers
+        return fibers
+    
+    def remove_subtree_fiber(self, leaf_node, with_root=False):
+        node = leaf_node
+        while node.parent != self and len(node.parent.children) <= 1:
+            node = node.parent
+        node.parent = None
+        if with_root and node.parent == self:
+            self = None
+
+    
+    def get_rerooted_tree(self, nid_start=1, return_old_nodes=False, return_old2new=False):
+        # --- 1) Collect all nodes in the original connected component (the whole tree) ---
+        # We can reach all nodes by going to the original root then iterating descendants,
+        # but we can also build adjacency on the fly by BFS from new_root_old.
+        # Here we BFS using "undirected" neighbors: parent + children.
+        q = deque([self])
+        parent_old = {self: None}
+        old_nodes = []  # BFS order in old graph
+        while q:
+            node = q.popleft()
+            if node in old_nodes:
+                continue
+            old_nodes.append(node)
+
+            if not node.parent.is_virtual() and node.parent is not None:
+                if node.parent not in parent_old:
+                    q.append(node.parent)
+                    parent_old[node.parent] = node
+            
+            for c in node.children:
+                if c not in parent_old:
+                    q.append(c)
+                    parent_old[c] = node
+
+        # --- 2) Create new nodes (one-to-one mapping), without linking parents yet ---
+        old2new = {}
+        for old in old_nodes:
+            new = SwcNode(
+                nid=nid_start,
+                ntype=old.ntype,
+                coord=copy.deepcopy(old.coord),
+                radius=old.radius,
+            )
+            old2new[old] = new
+            nid_start += 1        
+
+        # Link new nodes by the parent map
+        for child_old, p_old in parent_old.items():
+            child_new = old2new[child_old]
+            if p_old is not None:
+                child_new.parent = old2new[p_old]
+        
+        if return_old_nodes:
+            return old2new[self], set(old_nodes)
+        
+        if return_old2new:
+            return old2new[self], old2new
+        
+        return old2new[self]

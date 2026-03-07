@@ -63,19 +63,19 @@ class SwcTree:
         self._size = len(self.id_set)
         return self._size
     
-    def get_edge_num(self):
-        edges = 0
-        for node in self.get_node_list():
-            if not node.is_virtual() and not node.parent.is_virtual():
-                edges += 1
-        return edges
-
     def name(self):
         return self._name
 
     def clear(self):
         self.root = Make_Virtual()
         self.id_set = set()
+    
+    def get_edge_num(self):
+        edges = 0
+        for node in self.get_node_list():
+            if not node.is_virtual() and not node.parent.is_virtual():
+                edges += 1
+        return edges
 
     # warning: slow, don't use in loop
     def node_from_id(self, nid):
@@ -262,15 +262,13 @@ class SwcTree:
     # use this function if son is a new node
     def add_child(self, node, son_node):
         # swc_node is a module in model, while node and son_node are objects.
-        if not isinstance(son_node, SwcNode) or not isinstance(node, SwcNode):
-            return False
+        assert isinstance(son_node, SwcNode) and isinstance(node, SwcNode)
         nid = self.next_id()
 
         son_node.nid = nid
         son_node.parent = node
 
         self.id_set.add(nid)
-        return True
 
     # use this function if son use to be a part of this tree
     def link_child(self, pa, son):
@@ -401,6 +399,20 @@ class SwcTree:
             if len(node.children) == 0:
                 leaf_list.append(node)
         return leaf_list
+    
+    def get_nearest_node(self, coord, subtree_root=None):
+        if subtree_root is None:
+            subtree_root = self.root
+        nearest_node = None
+        nearest_dist = float("inf")
+        for node in PreOrderIter(subtree_root):
+            if node.is_virtual():
+                continue
+            dist = node.distance(coord)
+            if dist < nearest_dist:
+                nearest_dist = dist
+                nearest_node = node
+        return nearest_node, nearest_dist
 
     def get_somas(self):
         """The soma labeled as 1. The area near the soma is annotated with straight lines. It is assumed that the soma is a sphere."""
@@ -476,7 +488,8 @@ class SwcTree:
             roots.append(child)
         roots = nodes2coords(roots) if return_coords else roots
         return roots
-
+    
+    ## -- get fibers related functions -- ##
     def get_fibers(self, only_from_soma=False):
         fibers = []
         leaf_nodes = self.get_leaf_nodes()
@@ -493,49 +506,39 @@ class SwcTree:
                     fibers.append(fiber)
         return fibers
     
-    def get_rerooted_tree(self, new_root_old, nid_start=1):
-        # --- 1) Collect all nodes in the original connected component (the whole tree) ---
-        # We can reach all nodes by going to the original root then iterating descendants,
-        # but we can also build adjacency on the fly by BFS from new_root_old.
-        # Here we BFS using "undirected" neighbors: parent + children.
-        q = deque([new_root_old])
-        parent_old = {new_root_old: None}
-        old_nodes = []  # BFS order in old graph
-        while q:
-            node = q.popleft()
-            if node in old_nodes:
-                continue
-            old_nodes.append(node)
-
-            if not node.parent.is_virtual():
-                if node.parent not in parent_old:
-                    q.append(node.parent)
-                    parent_old[node.parent] = node
-            
-            for c in node.children:
-                if c not in parent_old:
-                    q.append(c)
-                    parent_old[c] = node
-
-        # --- 2) Create new nodes (one-to-one mapping), without linking parents yet ---
-        old2new = {}
-        for old in old_nodes:
-            new = SwcNode(
-                nid=nid_start,
-                ntype=old.ntype,
-                coord=copy.deepcopy(old.coord),
-                radius=old.radius,
-            )
-            old2new[old] = new
-            nid_start += 1        
-
-        # Link new nodes by the parent map
-        for child_old, p_old in parent_old.items():
-            child_new = old2new[child_old]
-            if p_old is not None:
-                child_new.parent = old2new[p_old]
-
-        return old2new[new_root_old], set(old_nodes)
+    def get_fibers_by_roi(self, roi):
+        """Get segmented fibers that all nodes in the region of interest (ROI)."""
+        all_fibers = self.get_fibers()
+        fibers = []
+        f = False
+        for fiber in all_fibers:
+            new_fiber = None
+            for node in fiber:
+                if node.is_in_roi(roi):
+                    if new_fiber is None:
+                        new_fiber = SwcFiber()
+                    new_fiber.append(node)
+                else:
+                    if new_fiber is not None:
+                        fibers.append(new_fiber)
+                        new_fiber = None
+            if new_fiber is not None and len(new_fiber) > 1 and new_fiber not in fibers:
+                fibers.append(new_fiber)
+        return fibers
+    
+    def get_fiber_by_leaf(self, leaf_node, roi=None):
+        if roi is not None:
+            if not leaf_node.is_in_roi(roi):
+                return None
+        fiber = SwcFiber()
+        node = leaf_node
+        while node != self.root:
+            if not node.is_in_roi(roi):
+                break
+            fiber.append(node)
+            node = node.parent
+        fiber.reverse()
+        return fiber
     
     def align_roots(self, root_coords, align_roots_thredhold=20.0):
         # find new roots
@@ -552,14 +555,14 @@ class SwcTree:
         swc = SwcTree()
         vis = set()
         for root in new_roots:
-            new_root, visited = self.get_rerooted_tree(root, nid_start=swc.next_id())
+            new_root, visited = root.get_rerooted_tree(nid_start=swc.next_id(), return_old=True)
             swc.link_child(swc.root, new_root)
             vis |= visited
         
         # add remaining components (if any) as separate trees under the virtual root
         for node in self.root.children:
             if node not in vis:
-                new_root, visited = self.get_rerooted_tree(node, nid_start=swc.next_id())
+                new_root, visited = node.get_rerooted_tree(nid_start=swc.next_id(), return_old_nodes=True)
                 swc.link_child(swc.root, new_root)
                 vis |= visited
         return swc

@@ -19,10 +19,11 @@ class SwcSoma:
         assert len(scale)==len(self.center[:])
         for i in range(len(scale)):
             self.center[i] = self.center[i] * scale[i]
-            if len(self.annoed_center)>0:
+            if len(self.annoed_center[:])>0:
                 self.annoed_center[i] = self.annoed_center[i] * scale[i]
                 for j in range(len(self.anno_fibers)):
-                    self.anno_fibers[j][i] = self.anno_fibers[j][i] * scale[i]
+                    for k in range(len(self.anno_fibers[j])):
+                        self.anno_fibers[j][k][i] = self.anno_fibers[j][k][i] * scale[i]
 
 def read_soma_from_file(path):
     somas = []

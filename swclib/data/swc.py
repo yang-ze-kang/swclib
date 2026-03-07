@@ -216,6 +216,24 @@ class Swc(object):
             self.bound_box[5] * scale[2],
         ]
         return self
+    
+    def add_offset(self, offset):
+        """
+        Add an offset to the coordinates of all nodes.
+        """
+        for nid, node in self.nodes.items():
+            node["x"] += offset[0]
+            node["y"] += offset[1]
+            node["z"] += offset[2]
+        self.bound_box = [
+            self.bound_box[0] + offset[0],
+            self.bound_box[1] + offset[1],
+            self.bound_box[2] + offset[2],
+            self.bound_box[3] + offset[0],
+            self.bound_box[4] + offset[1],
+            self.bound_box[5] + offset[2],
+        ]
+        return self
 
     def resample(self, min_distance=2.0, in_place=True):
         """
