@@ -51,8 +51,8 @@ def save_somas_to_file(somas: List["SwcSoma"], path, scale=(1.0, 1.0, 1.0)):
             swc_counter += 1
             for fiber in soma.anno_fibers:
                 pre = root
-                for coord in fiber[1:]:
-                    f.write(f"{swc_counter} 0 {coord[0]*scale[0]:.13e} {coord[1]*scale[1]:.13e} {coord[2]*scale[2]:.13e} {0.1:.13e} {pre}\n")
+                for node in fiber[1:]:
+                    f.write(f"{swc_counter} {node.ntype} {node[0]*scale[0]:.13e} {node[1]*scale[1]:.13e} {node[2]*scale[2]:.13e} {0.1:.13e} {pre}\n")
                     pre = swc_counter
                     swc_counter += 1
 

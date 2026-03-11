@@ -125,7 +125,7 @@ class SwcNode(NodeMixin):
         """
         # make sure itself is a regular node
         if not self.is_regular():
-            return 0.0
+            return None
 
         # make sure tn is a valid swc node
         if isinstance(tn, SwcNode) and tn.is_regular():
@@ -142,7 +142,7 @@ class SwcNode(NodeMixin):
                 return self.coord.distance_to_point_2d(tn)
             return self.coord.distance(tn)
 
-        return 0.0
+        return None
 
     def parent_distance(self):
         """Returns the distance to it parent."""
@@ -197,7 +197,7 @@ class SwcNode(NodeMixin):
         q.put(self)
         while not q.empty():
             cur = q.get()
-            if len(cur.children) == 0:
+            if len(cur.children) == 0 and cur.parent is not None and not cur.is_virtual() and not cur.parent.is_virtual():
                 leafs.append(cur)
             for child in cur.children:
                 q.put(child)
@@ -289,3 +289,16 @@ class SwcNode(NodeMixin):
             return old2new[self], old2new
         
         return old2new[self]
+    
+    def get_fiber_by_leaf(self, roi=None):
+        from swclib.data.swc_fiber import SwcFiber
+        fiber = SwcFiber()
+        node = self
+        while node.parent != None and not node.parent.is_virtual():
+            if node.is_in_roi(roi):
+                fiber.append(node)
+            else:
+                break
+            node = node.parent
+        fiber.reverse()
+        return fiber

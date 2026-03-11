@@ -380,7 +380,8 @@ class Swc(object):
                     # Insert new node
                     nid_new = next_id
                     next_id += 1
-                    out.append((nid_new, p, r, 5, None))  # type=5 for inserted node
+                    # out.append((nid_new, p, r, 5, None))  # type=5 for inserted node
+                    out.append((nid_new, p, r, int(types[idx+1]), None))
 
             return out
 
@@ -659,69 +660,214 @@ class Swc(object):
         density = np.clip(1 - mean_dist/(dis*exclude_hops*2), 0.0, 1.0)
         return float(density)
     
+    def remove_duplicate_nodes(
+        self,
+        use_radius: bool = False,
+        round_ndigits: int = None,
+        reindex: bool = False,
+        in_place: bool = True,
+    ):
+        """
+        Remove duplicate nodes that share the same position.
+
+        Parameters
+        ----------
+        use_radius : bool
+            If True, use (x, y, z, radius) as duplicate key.
+            Otherwise use only (x, y, z).
+        round_ndigits : int | None
+            If not None, round coordinates (and radius if enabled) before comparison.
+            Useful when coordinates differ only by tiny floating-point noise.
+        reindex : bool
+            Whether to reassign node ids to 1..N after deduplication.
+        in_place : bool
+            Whether to modify self in place.
+
+        Returns
+        -------
+        Swc
+            Deduplicated SWC object.
+        """
+        if len(self.nodes) == 0:
+            return self if in_place else Swc()
+
+        def _make_key(node):
+            x = float(node["x"])
+            y = float(node["y"])
+            z = float(node["z"])
+            r = float(node["radius"])
+
+            if round_ndigits is not None:
+                x = round(x, round_ndigits)
+                y = round(y, round_ndigits)
+                z = round(z, round_ndigits)
+                r = round(r, round_ndigits)
+
+            if use_radius:
+                return (x, y, z, r)
+            return (x, y, z)
+
+        # Keep the first node for each duplicate key
+        key_to_keep_id = {}
+        old_id_to_keep_id = {}
+        kept_ids = []
+
+        for nid, node in self.nodes.items():
+            key = _make_key(node)
+            if key not in key_to_keep_id:
+                key_to_keep_id[key] = nid
+                kept_ids.append(nid)
+            old_id_to_keep_id[nid] = key_to_keep_id[key]
+
+        # Rebuild kept nodes and redirect parent pointers
+        new_nodes = {}
+        for old_id in kept_ids:
+            node = self.nodes[old_id]
+            old_parent = int(node["parent"])
+
+            if old_parent == -1:
+                new_parent = -1
+            else:
+                # If parent exists, redirect it to the kept node
+                new_parent = old_id_to_keep_id.get(old_parent, -1)
+
+            # Avoid self-loop after deduplication
+            if new_parent == old_id:
+                new_parent = -1
+
+            new_nodes[old_id] = {
+                "id": old_id,
+                "type": int(node["type"]),
+                "x": float(node["x"]),
+                "y": float(node["y"]),
+                "z": float(node["z"]),
+                "radius": float(node["radius"]),
+                "parent": int(new_parent),
+            }
+
+        # Optional: reindex node ids to compact 1..N
+        if reindex:
+            old_to_new = {old_id: i + 1 for i, old_id in enumerate(sorted(new_nodes.keys()))}
+            reindexed_nodes = {}
+
+            for old_id in sorted(new_nodes.keys()):
+                node = new_nodes[old_id]
+                new_id = old_to_new[old_id]
+                old_parent = int(node["parent"])
+                new_parent = -1 if old_parent == -1 else old_to_new[old_parent]
+
+                reindexed_nodes[new_id] = {
+                    "id": new_id,
+                    "type": int(node["type"]),
+                    "x": float(node["x"]),
+                    "y": float(node["y"]),
+                    "z": float(node["z"]),
+                    "radius": float(node["radius"]),
+                    "parent": int(new_parent),
+                }
+
+            new_nodes = reindexed_nodes
+
+        # Rebuild edges
+        new_edges = []
+        for nid, node in new_nodes.items():
+            new_edges.append((nid, int(node["parent"])))
+
+        # Recompute bounding box
+        if len(new_nodes) > 0:
+            xs = [node["x"] for node in new_nodes.values()]
+            ys = [node["y"] for node in new_nodes.values()]
+            zs = [node["z"] for node in new_nodes.values()]
+            new_bound_box = [
+                min(xs), min(ys), min(zs),
+                max(xs), max(ys), max(zs),
+            ]
+        else:
+            new_bound_box = [np.inf, np.inf, np.inf, 0, 0, 0]
+
+        if in_place:
+            self.nodes = new_nodes
+            self.edges = new_edges
+            self.bound_box = new_bound_box
+            return self
+        else:
+            new_swc = Swc()
+            new_swc.nodes = new_nodes
+            new_swc.edges = new_edges
+            new_swc.bound_box = new_bound_box
+            return new_swc
+        
     def save_to_swc(
-            self,
-            out_path: str,
-            *,
-            sort_by_id: bool = True,
-            write_header: bool = True,
-            float_fmt: str = ".6f",
-            mkdir: bool = True,
-        ) -> str:
-            """
-            Export current SWC to a .swc text file.
+        self,
+        out_path: str,
+        *,
+        sort_by_id: bool = True,
+        write_header: bool = True,
+        float_fmt: str = ".6f",
+        mkdir: bool = True,
+        reindex: bool = False,
+    ) -> str:
+        """
+        Export current SWC to a .swc text file.
 
-            Parameters
-            ----------
-            out_path : str
-                Output SWC path.
-            sort_by_id : bool
-                Whether to sort nodes by node id before writing.
-            write_header : bool
-                Whether to write SWC header lines.
-            default_type : int
-                Default SWC type if missing.
-            default_radius : float
-                Default radius if missing.
-            float_fmt : str
-                Format for floats, e.g. ".3f", ".6f".
-            mkdir : bool
-                Create parent directory if missing.
+        Parameters
+        ----------
+        out_path : str
+            Output SWC path.
+        sort_by_id : bool
+            Whether to sort nodes by node id before writing.
+        write_header : bool
+            Whether to write SWC header lines.
+        float_fmt : str
+            Format for floats, e.g. ".3f", ".6f".
+        mkdir : bool
+            Create parent directory if missing.
+        reindex : bool
+            Whether to reassign node ids to 1..N when saving.
 
-            Returns
-            -------
-            str
-                The output path.
-            """
-            if mkdir:
-                os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        Returns
+        -------
+        str
+            The output path.
+        """
+        if mkdir:
+            os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
-            # Choose node order
-            node_ids = list(self.nodes.keys())
-            if sort_by_id:
-                node_ids.sort()
+        node_ids = list(self.nodes.keys())
+        if sort_by_id:
+            node_ids.sort()
 
-            with open(out_path, "w", encoding="utf-8") as f:
-                if write_header:
-                    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                    f.write("# Exported by Swc.save_to_swc\n")
-                    f.write(f"# Export time (UTC): {ts}\n")
-                    f.write("# id type x y z radius parent\n")
+        if reindex:
+            old_to_new = {old_id: i + 1 for i, old_id in enumerate(node_ids)}
+        else:
+            old_to_new = {old_id: old_id for old_id in node_ids}
 
-                for nid in node_ids:
-                    n = self.nodes[nid]
-                    ntype_i = int(n['type'])
-                    x = float(n['x'])
-                    y = float(n['y'])
-                    z = float(n['z'])
-                    r = float(n['radius'])
-                    pid = int(n['parent'])
+        with open(out_path, "w", encoding="utf-8") as f:
+            if write_header:
+                ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                f.write("# Exported by Swc.save_to_swc\n")
+                f.write(f"# Export time (UTC): {ts}\n")
+                f.write("# id type x y z radius parent\n")
 
-                    # SWC format: id type x y z r parent
-                    f.write(
-                        f"{nid} {ntype_i} "
-                        f"{format(x, float_fmt)} {format(y, float_fmt)} {format(z, float_fmt)} "
-                        f"{format(r, float_fmt)} {pid}\n"
-                    )
+            for old_id in node_ids:
+                n = self.nodes[old_id]
+                nid = old_to_new[old_id]
+                ntype_i = int(n["type"])
+                x = float(n["x"])
+                y = float(n["y"])
+                z = float(n["z"])
+                r = float(n["radius"])
 
-            return out_path
+                old_parent = int(n["parent"])
+                if old_parent == -1:
+                    pid = -1
+                else:
+                    pid = old_to_new[old_parent]
+
+                f.write(
+                    f"{nid} {ntype_i} "
+                    f"{format(x, float_fmt)} {format(y, float_fmt)} {format(z, float_fmt)} "
+                    f"{format(r, float_fmt)} {pid}\n"
+                )
+
+        return out_path

@@ -32,6 +32,23 @@ default_metric_params = {
     },
 }
 
+default_metric_params_wb = {
+    "keypoints": {
+        "keypoint_types": ["branch", "leaf"],
+        "threshold_dis": 5,
+        "scale": (1.0, 1.0, 1.0),
+    },
+    "fiber": {
+        "iou_threshold": 0.75,
+        "dist_threshold": 5,
+        "dist_sample": 1.0,
+        "align_roots": False,
+        "scale": (1.0, 1.0, 1.0),
+        "resample_step": 2.0,
+        "with_direction": True
+    },
+}
+
 METRIC_MAP = {
     "ssd": SSDMetric,
     "length": LengthMetric,
@@ -39,6 +56,14 @@ METRIC_MAP = {
     "fiber": FiberMetric,
 }
 
+
+def build_metrics(metric_names, params):
+    metrics = {}
+    for name in metric_names:
+        metric_class = METRIC_MAP[name]
+        metric = metric_class(**params[name])
+        metrics[name] = metric
+    return metrics
 
 class MetricManager:
     def __init__(self, metric_names=["ssd", "length", "keypoints", "fiber"], collect_method='micro', scale=(1.0, 1.0, 1.0)):

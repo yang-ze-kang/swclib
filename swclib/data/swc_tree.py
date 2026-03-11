@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from scipy.spatial import KDTree
 import copy
 from collections import deque
+import heapq
 
 from swclib.data.swc_node import SwcNode, nodes2coords
 from swclib.data.swc_soma import SwcSoma
@@ -400,19 +401,30 @@ class SwcTree:
                 leaf_list.append(node)
         return leaf_list
     
-    def get_nearest_node(self, coord, subtree_root=None):
+    def get_nearest_node(self, coord, subtree_root=None, topk=1):
         if subtree_root is None:
             subtree_root = self.root
-        nearest_node = None
-        nearest_dist = float("inf")
+
+        if topk <= 0:
+            return []
+
+        candidates = []
         for node in PreOrderIter(subtree_root):
             if node.is_virtual():
                 continue
             dist = node.distance(coord)
-            if dist < nearest_dist:
-                nearest_dist = dist
-                nearest_node = node
-        return nearest_node, nearest_dist
+            candidates.append((dist, node))
+
+        if not candidates:
+            return [] if topk > 1 else (None, float("inf"))
+
+        nearest = heapq.nsmallest(topk, candidates, key=lambda x: x[0])
+
+        if topk == 1:
+            dist, node = nearest[0]
+            return node, dist
+
+        return [(node, dist) for dist, node in nearest]
 
     def get_somas(self):
         """The soma labeled as 1. The area near the soma is annotated with straight lines. It is assumed that the soma is a sphere."""

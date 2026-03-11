@@ -75,7 +75,7 @@ class SwcFiber:
     
     def get_nearest_node(self, point, return_dist=False):
         coords = self.coords
-        tree = self.cahce_cKDTree(coords)
+        tree = cKDTree(coords)
         dist, idx = tree.query(point)
         if return_dist:
             return self.nodes[idx], dist
@@ -102,6 +102,16 @@ class SwcFiber:
         min_iou_thres=0.5,
         eps=1e-7,
     ):
+        if len(self.nodes) == 1:
+            if fiber.get_nearest_node(self.coords[0], return_dist=True)[1] <= dist_threshold:
+                return len(self.nodes) / len(fiber.nodes)
+            else:
+                return 0.0
+        if len(fiber.nodes) == 1:
+            if self.get_nearest_node(fiber.coords[0], return_dist=True)[1] <= dist_threshold:
+                return len(fiber.nodes) / len(self.nodes)
+            else:
+                return 0.0
         l1 = self.length
         l2 = fiber.length
         if l1 / l2 < min_iou_thres or l2 / l1 < min_iou_thres:
@@ -128,11 +138,14 @@ class SwcFiber:
         lunion = l1 + l2 - loverlap
         return loverlap / (lunion + eps)
     
-    def is_sub_fiber_of(self, fiber: "SwcFiber", dist_sample=1.0, dist_threshold=3.0, same_fiber_iou_thres=0.9):
+    def is_sub_fiber_of(self, fiber: "SwcFiber", dist_sample=1.0, dist_threshold=3.0, same_fiber_iou_thres=0.9, return_prob=False):
         l1 = self.length
         l2 = fiber.length
         if l1 > l2  * 1.5:
-            return False
+            if return_prob:
+                return 0.0
+            else:
+                return False
         coords1 = self.coords
         coords2 = fiber.coords
         coords1 = self.cahce_resample_coords_by_distance(dist_sample)
@@ -152,9 +165,11 @@ class SwcFiber:
         mask = dists <= dist_threshold
         overlap2 = np.sum(mask) * dist_sample
         loverlap = (overlap1 + overlap2) / 2.0
-        if loverlap / (l1 + 1e-7) > same_fiber_iou_thres:
-            return True
-        return False
+        prob = loverlap / (l1 + 1e-7)
+        if return_prob:
+            return prob
+        else:
+            return prob > same_fiber_iou_thres
     
     def to_str_list(self, scale=(1.0, 1.0, 1.0)):
         swc_str = []
