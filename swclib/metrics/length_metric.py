@@ -3,7 +3,7 @@ import math
 from rtree import index
 from pathlib import Path
 
-from swclib.data.swc_tree import SwcTree
+from swclib.data.swc_forest import SwcForest
 from swclib.data import euclidean_point as euc_p
 
 DINF = 999999999999.0
@@ -20,8 +20,8 @@ def get_match_edges(
     """
     get matched edge set
     Args:
-        gold_swc_tree(SwcTree):
-        test_swc_tree(SwcTree):
+        gold_swc_tree(SwcForest):
+        test_swc_tree(SwcForest):
         radius_threshold(float): threshold of key point radius
         length_threshold(float): threshold of length of the matching edges
         debug(bool): list debug info ot not
@@ -59,7 +59,7 @@ def get_match_edges(
     #     raise Exception("[Error: ] Max id in test swc tree too large")
 
     for node in gold_node_list:
-        if node.is_virtual() or node.parent.is_virtual():
+        if node.is_root():
             continue
 
         line_tuple_a_set = get_nearby_edges(
@@ -93,9 +93,7 @@ def get_match_edges(
                     test_swc_tree,
                     line_tuple_a,
                     line_tuple_b,
-                    euc_p.Line(
-                        e_node_1=node.coord, e_node_2=node.parent.coord
-                    ),
+                    euc_p.Line(e_node_1=node.coord, e_node_2=node.parent.coord),
                     id_rootdis_dict,
                 )
                 gold_length = node.parent_distance()
@@ -158,7 +156,7 @@ def get_edge_rtree(swc_tree=None):
     p.dimension = 3
     rtree = index.Index(properties=p)
     for node in swc_tree_list:
-        if node.is_virtual() or node.parent.is_virtual():
+        if node.is_root():
             continue
 
         rtree.insert(node.nid, get_bounds(node, node.parent, extra=node.radius))
@@ -198,7 +196,7 @@ def get_idedge_dict(swc_tree=None):
     id_edge_dict = {}
     swc_tree_list = swc_tree.get_node_list()
     for node in swc_tree_list:
-        if node.is_virtual() or node.parent.is_virtual():
+        if node.is_root():
             continue
         id_edge_dict[node.nid] = tuple([node, node.parent])
     return id_edge_dict
@@ -256,9 +254,7 @@ def get_nearby_edges(
             continue
 
         new_d = e_point.distance(
-            euc_p.Line(
-                e_node_1=line_tuple[0].coord, e_node_2=line_tuple[1].coord
-            )
+            euc_p.Line(e_node_1=line_tuple[0].coord, e_node_2=line_tuple[1].coord)
         )
         if not_self and new_d == 0:
             continue
@@ -275,7 +271,7 @@ def get_lca_length(
     This function get the foot of two side nodes of test_line first.
     than calculate the distance between two foots.
     Args:
-        gold_swc_tree(SwcTree): swc tree that are calculated.
+        gold_swc_tree(SwcForest): swc tree that are calculated.
         gold_line_tuple_a(tuple): a list of two nodes describe a edge
         gold_line_tuple_b(tuple): a list of two nodes describe a edge
         test_line(Line): Line object defined in pyneval/model/euclidean_point
@@ -304,9 +300,7 @@ def get_lca_length(
     ):
         return foot_a.distance(foot_b)
 
-    lca_id = gold_swc_tree.get_lca(
-        gold_line_tuple_a[0].nid, gold_line_tuple_b[0].nid
-    )
+    lca_id = gold_swc_tree.get_lca(gold_line_tuple_a[0].nid, gold_line_tuple_b[0].nid)
     if lca_id is None or lca_id < 1:
         return DINF
     try:
@@ -368,7 +362,7 @@ def is_route_clean(
     for any edge, we constructed a data structure call interval, recording witch parts of the edge are used.
     so this function will call add_interval, is_intered to change the useage of the edge.
     Args:
-        gold_swc_tree(SwcTree) swc tree that are calculated.
+        gold_swc_tree(SwcForest) swc tree that are calculated.
         gold_line_tuple_a(tuple): a list of two nodes describe a edge
         gold_line_tuple_b(tuple): a list of two nodes describe a edge
         node1(Swc_Node): one node side
@@ -428,9 +422,7 @@ def is_route_clean(
         return False
 
     # not on the same edge, get lca first
-    lca_id = gold_swc_tree.get_lca(
-        gold_line_tuple_a[0].nid, gold_line_tuple_b[0].nid
-    )
+    lca_id = gold_swc_tree.get_lca(gold_line_tuple_a[0].nid, gold_line_tuple_b[0].nid)
     if lca_id is None:
         raise Exception("[Error:] No Lca found")
 
@@ -551,7 +543,7 @@ def get_route_node(current_node, lca_id):
     get all node from current node to the LCA node
     """
     res_list = []
-    while not current_node.is_virtual() and not current_node.nid == lca_id:
+    while not current_node is None and not current_node.nid == lca_id:
         res_list.append(current_node)
         current_node = current_node.parent
 
@@ -589,16 +581,16 @@ class LengthMetric(object):
 
     def length_metric_run(
         self,
-        gold_swc_tree=None,
-        test_swc_tree=None,
+        gold_swc_tree: SwcForest = None,
+        test_swc_tree: SwcForest = None,
         radius_threshold=2.0,
         length_threshold=0.2,
     ):
         """
         get matched edge set and calculate recall and precision
         Args:
-            gold_swc_tree(SwcTree):
-            test_swc_tree(SwcTree):
+            gold_swc_tree(SwcForest):
+            test_swc_tree(SwcForest):
             radius_threshold(float): threshold of key point radius
             length_threshold(float): threshold of length of the matching edges
         Returns:
@@ -646,17 +638,23 @@ class LengthMetric(object):
         else:
             precision = 0
 
-        return min(recall, 1.0), min(precision, 1.0), match_length, test_total_length - match_length, gold_total_length - match_length
+        return (
+            min(recall, 1.0),
+            min(precision, 1.0),
+            match_length,
+            test_total_length - match_length,
+            gold_total_length - match_length,
+        )
 
     def run(self, gold_swc_tree, test_swc_tree):
         """Main function of length metric.
         unpack config and run the matching function
         Args:
-            gold_swc_tree(SwcTree|str):
-            test_swc_tree(SwcTree|str):
+            gold_swc_tree(SwcForest|str):
+            test_swc_tree(SwcForest|str):
         Example:
-            test_tree = swc_node.SwcTree()
-            gold_tree = swc_node.SwcTree()
+            test_tree = swc_node.SwcForest()
+            gold_tree = swc_node.SwcForest()
             gold_tree.load("..\\..\\data\\test_data\\geo_metric_data\\gold_fake_data1.swc")
             test_tree.load("..\\..\\data\\test_data\\geo_metric_data\\test_fake_data1.swc")
             lm_res = length_metric(gold_swc_tree=gold_tree,
@@ -670,11 +668,11 @@ class LengthMetric(object):
             None
         """
         if isinstance(gold_swc_tree, str) or isinstance(gold_swc_tree, Path):
-            gold_swc_tree = SwcTree(gold_swc_tree)
+            gold_swc_tree = SwcForest(gold_swc_tree)
         if isinstance(test_swc_tree, str) or isinstance(test_swc_tree, Path):
-            test_swc_tree = SwcTree(test_swc_tree)
-        assert isinstance(gold_swc_tree, SwcTree)
-        assert isinstance(test_swc_tree, SwcTree)
+            test_swc_tree = SwcForest(test_swc_tree)
+        assert isinstance(gold_swc_tree, SwcForest)
+        assert isinstance(test_swc_tree, SwcForest)
 
         gold_swc_tree.rescale(self.scale)
         test_swc_tree.rescale(self.scale)
@@ -693,16 +691,16 @@ class LengthMetric(object):
             "recall": recall,
             "precision": precision,
             "f1_score": 2 * recall * precision / (recall + precision + 1e-6),
-            "TP":TP,
-            "FP":FP,
-            "FN":FN
+            "TP": TP,
+            "FP": FP,
+            "FN": FN,
         }
         return res
-    
 
-if __name__=='__main__':
-    metric = LengthMetric(radius_threshold=2, scale=(0.35,0.35,1))
-    path1 = '/gpfs-flash/hulab/yangzekang/neuron/neuron-seg/output_r0.1.swc'
-    path2 = '/gpfs-flash/hulab/yangzekang/neuron/data/guolab/etv133_block_swc_yzk/annotation_idx_3_6539_1105_7627.swc'
+
+if __name__ == "__main__":
+    metric = LengthMetric(radius_threshold=2, scale=(0.35, 0.35, 1))
+    path1 = "/gpfs-flash/hulab/yangzekang/neuron/neuron-seg/output_r0.1.swc"
+    path2 = "/gpfs-flash/hulab/yangzekang/neuron/data/guolab/etv133_block_swc_yzk/annotation_idx_3_6539_1105_7627.swc"
     res = metric.run(path2, path1)
     print(res)

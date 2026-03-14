@@ -3,7 +3,7 @@ from scipy.optimize import linear_sum_assignment
 from pathlib import Path
 
 from swclib.data.swc_node import nodes2coords
-from swclib.data.swc_tree import SwcTree
+from swclib.data.swc_forest import SwcForest
 
 
 class KeypointMetric:
@@ -17,11 +17,11 @@ class KeypointMetric:
 
     def run(self, gold, pred):
         if isinstance(gold, str) or isinstance(gold, Path):
-            gold = SwcTree(gold)
+            gold = SwcForest(gold)
         if isinstance(pred, str) or isinstance(pred, Path):
-            pred = SwcTree(pred)
-        assert isinstance(pred, SwcTree)
-        assert isinstance(pred, SwcTree)
+            pred = SwcForest(pred)
+        assert isinstance(pred, SwcForest)
+        assert isinstance(pred, SwcForest)
         gold.rescale(self.scale)
         pred.rescale(self.scale)
 

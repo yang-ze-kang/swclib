@@ -1,7 +1,5 @@
-import math
-from anytree import NodeMixin, RenderTree, iterators
+from anytree import NodeMixin
 from typing import List
-from dataclasses import dataclass, field
 import numpy as np
 from collections import deque
 import copy
@@ -11,73 +9,6 @@ from swclib.data.euclidean_point import EuclideanPoint3D
 
 _3D = "3d"
 _2D = "2d"
-
-
-# not used old code
-def compute_platform_area(r1, r2, h):
-    return (r1 + r2) * h * math.pi
-
-
-# not used old code
-def compute_two_node_area(tn1, tn2, remain_dist):
-    """Returns the surface area formed by two nodes"""
-    r1 = tn1.radius()
-    r2 = tn2.radius()
-    d = tn1.distance(tn2)
-    print(remain_dist)
-
-    if remain_dist >= d:
-        h = d
-    else:
-        h = remain_dist
-        a = remain_dist / d
-        r2 = r1 * (1 - a) + r2 * a
-
-    area = compute_platform_area(r1, r2, h)
-    return area
-
-
-# not used old code
-def compute_surface_area(tn, range_radius):
-    area = 0
-
-    # backtrace
-    currentDist = 0
-    parent = tn.parent
-    while parent and currentDist < range_radius:
-        remainDist = range_radius - currentDist
-        area += compute_two_node_area(tn, parent, remainDist)
-        currentDist += tn.distance(parent)
-        tn = parent
-        parent = tn.parent
-
-    # forwardtrace
-    currentDist = 0
-    childList = tn.children
-    while len(childList) == 1 and currentDist < range_radius:
-        child = childList[0]
-        remainDist = range_radius - currentDist
-        area += compute_two_node_area(tn, child, remainDist)
-        currentDist += tn.distance(child)
-        tn = child
-        childList = tn.children
-
-    return area
-
-
-def get_lca(u, v):
-    tmp_set = set()
-    tmp_u = u
-    tmp_v = v
-    while u.get_id() != -1:
-        tmp_set.add(u.get_id())
-        u = u.parent
-
-    while v.get_id() != -1:
-        if v.get_id() in tmp_set:
-            return v.get_id()
-        v = v.parent
-    return None
 
 
 def nodes2coords(nodes: List["SwcNode"]):
@@ -101,10 +32,6 @@ class SwcNode(NodeMixin):
     def __setitem__(self, key, value):
         self.coord[key] = value
 
-    def is_virtual(self):
-        """Returns True iff the node is virtual."""
-        return self.nid < 0
-
     def is_regular(self):
         """Returns True iff the node is NOT virtual."""
         return self.nid >= 0
@@ -115,6 +42,10 @@ class SwcNode(NodeMixin):
         return (xmin <= self.coord[0] <= xmax and
                 ymin <= self.coord[1] <= ymax and
                 zmin <= self.coord[2] <= zmax)
+    
+    def is_root(self):
+        """Returns True iff the node is root."""
+        return self.parent is None or self.parent.nid == -1
 
     def distance(self, tn=None, mode=_3D):
         """Returns the distance to another node.
@@ -148,17 +79,11 @@ class SwcNode(NodeMixin):
         """Returns the distance to it parent."""
         return self.distance(self.parent)
 
-
-    def is_isolated(self):
-        if (self.parent is None or self.parent.nid == -1) and len(
-            self.children
-        ) == 0:
-            return True
-        return False
-
     def to_swc_str(self, pid=None, scale=(1.0, 1.0, 1.0)):
         if pid is not None:
             return f"{self.nid} {self.ntype} {self.coord[0]*scale[0]:.13e} {self.coord[1]*scale[1]:.13e} {self.coord[2]*scale[2]:.13e} {self.radius} {pid}\n"
+        if self.is_root():
+            return f"{self.nid} {self.ntype} {self.coord[0]*scale[0]:.13e} {self.coord[1]*scale[1]:.13e} {self.coord[2]*scale[2]:.13e} {self.radius} -1\n"
         return f"{self.nid} {self.ntype} {self.coord[0]*scale[0]:.13e} {self.coord[1]*scale[1]:.13e} {self.coord[2]*scale[2]:.13e} {self.radius} {self.parent.nid}\n"
 
 
@@ -186,27 +111,34 @@ class SwcNode(NodeMixin):
         node_list = self.get_subtree_node_list()
         result = 0
         for tn in node_list:
-            if tn is None or tn.parent is None or tn.is_virtual() or tn.parent.is_virtual():
+            if tn.is_root():
                 continue
             result += tn.parent_distance()
         return result
     
-    def get_subtree_leafs(self):
+    def get_subtree_leafs(self,roi=None):
         leafs = []
         q = queue.LifoQueue()
+        if roi is not None and not self.is_in_roi(roi):
+            return leafs
         q.put(self)
         while not q.empty():
             cur = q.get()
-            if len(cur.children) == 0 and cur.parent is not None and not cur.is_virtual() and not cur.parent.is_virtual():
+            if len(cur.children) == 0 and not cur.is_root():
                 leafs.append(cur)
+            f = True
             for child in cur.children:
-                q.put(child)
+                if roi is None or child.is_in_roi(roi):
+                    f = False
+                    q.put(child)
+            if f and len(cur.children) > 0:
+                leafs.append(cur)
         return leafs
     
     def get_subtree_fibers(self, roi=None, with_root=False):
         from swclib.data.swc_fiber import SwcFiber
         fibers = []
-        leafs = self.get_subtree_leafs()
+        leafs = self.get_subtree_leafs(roi)
         for node in leafs:
             fiber = SwcFiber()
             while node != self:
@@ -217,18 +149,6 @@ class SwcNode(NodeMixin):
             fiber.reverse()
             if len(fiber) > 1 and fiber not in fibers:
                 fibers.append(fiber)
-        if roi is not None:
-            new_fibers = []
-            for fiber in fibers:
-                new_fiber = SwcFiber()
-                for node in fiber:
-                    if node.is_in_roi(roi):
-                        new_fiber.append(node)
-                    else:
-                        break
-                if len(new_fiber) > 1 and new_fiber not in new_fibers:
-                    new_fibers.append(new_fiber)
-            fibers = new_fibers
         return fibers
     
     def remove_subtree_fiber(self, leaf_node, with_root=False):
@@ -240,7 +160,7 @@ class SwcNode(NodeMixin):
             self = None
 
     
-    def get_rerooted_tree(self, nid_start=1, return_old_nodes=False, return_old2new=False):
+    def get_rerooted_tree(self, nid_start=1, ntype=None, return_old_nodes=False, return_old2new=False):
         # --- 1) Collect all nodes in the original connected component (the whole tree) ---
         # We can reach all nodes by going to the original root then iterating descendants,
         # but we can also build adjacency on the fly by BFS from new_root_old.
@@ -254,7 +174,7 @@ class SwcNode(NodeMixin):
                 continue
             old_nodes.append(node)
 
-            if not node.parent.is_virtual() and node.parent is not None:
+            if not node.is_root():
                 if node.parent not in parent_old:
                     q.append(node.parent)
                     parent_old[node.parent] = node
@@ -269,7 +189,7 @@ class SwcNode(NodeMixin):
         for old in old_nodes:
             new = SwcNode(
                 nid=nid_start,
-                ntype=old.ntype,
+                ntype=old.ntype if ntype is None else ntype,
                 coord=copy.deepcopy(old.coord),
                 radius=old.radius,
             )
@@ -290,11 +210,44 @@ class SwcNode(NodeMixin):
         
         return old2new[self]
     
+    def get_rerooted_subtree_fibers(self, roi=None, with_root=False):
+        from swclib.data.swc_fiber import SwcFiber
+        fibers = []
+        if not self.is_in_roi(roi):
+            return fibers
+        fiber = SwcFiber()
+        stack = [[self, False]]
+        visited = set()
+        visited.add(self.nid)
+        while len(stack) > 0:
+            cur, is_exit = stack.pop()
+            if not is_exit:
+                fiber.append(cur)
+                stack.append([cur, True])
+                f = True
+                for child in cur.children:
+                    if child.is_in_roi(roi) and child.nid not in visited:
+                        f = False   
+                        visited.add(child.nid)
+                        stack.append([child, False])
+                if not cur.is_root() and cur.parent.nid not in visited and cur.parent.is_in_roi(roi):
+                    f = False
+                    visited.add(cur.parent.nid)
+                    stack.append([cur.parent, False])
+                if f:
+                    new_fiber = fiber.copy()
+                    if not with_root:
+                        new_fiber.nodes = new_fiber.nodes[1:]
+                    fibers.append(new_fiber)
+            else:
+                fiber.pop()
+        return fibers
+    
     def get_fiber_by_leaf(self, roi=None):
         from swclib.data.swc_fiber import SwcFiber
         fiber = SwcFiber()
         node = self
-        while node.parent != None and not node.parent.is_virtual():
+        while node.parent != None and not node.is_root():
             if node.is_in_roi(roi):
                 fiber.append(node)
             else:

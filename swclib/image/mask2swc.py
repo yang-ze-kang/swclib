@@ -4,10 +4,9 @@ import networkx as nx
 from dataclasses import dataclass
 from math import acos, degrees
 from scipy.signal import savgol_filter
-from scipy.spatial import cKDTree
 
 from swclib.data.swc_fiber import resample_nodes_by_distance
-from swclib.data.swc_soma import read_soma_from_file, nx_refine_with_soma_annotation
+from swclib.data.swc_soma import nx_refine_with_soma_annotation
 from swclib.utils.nx import nx_clear_invalid_edges, nx_graph_to_swc
 
 

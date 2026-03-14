@@ -1,7 +1,6 @@
 import numpy as np
 from pathlib import Path
 from scipy.spatial import cKDTree
-from sklearn import tree
 
 from swclib.data.swc import Swc
 

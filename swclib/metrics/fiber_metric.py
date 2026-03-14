@@ -4,7 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from swclib.data.swc import Swc
-from swclib.data.swc_tree import SwcTree
+from swclib.data.swc_forest import SwcForest
 from swclib.utils.points import point_pair_distance
 
 
@@ -39,14 +39,14 @@ class FiberMetric:
             if self.resample_step!=None:
                 gold = Swc(gold)
                 gold.resample(self.resample_step)
-            gold = SwcTree(gold)
+            gold = SwcForest(gold)
         if isinstance(pred, str) or isinstance(pred, Path):
             if self.resample_step!=None:
                 pred = Swc(pred)
                 pred.resample(self.resample_step)
-            pred = SwcTree(pred)
-        assert isinstance(pred, SwcTree)
-        assert isinstance(pred, SwcTree)
+            pred = SwcForest(pred)
+        assert isinstance(pred, SwcForest)
+        assert isinstance(gold, SwcForest)
         # align roots if needed
         if self.align_roots:
             roots = gold.get_roots(return_coords=True)

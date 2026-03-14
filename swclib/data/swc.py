@@ -5,7 +5,6 @@ from copy import deepcopy
 import math
 from datetime import datetime, timezone
 
-from swclib.data.swc_tree import SwcTree
 from swclib.data.swc_node import nodes2coords
 from swclib.utils.points import cal_segment_length
 
@@ -140,6 +139,7 @@ def merge_swcs(swcs, *, offsets=None, keep_file_name=True):
 
     return merged
 
+
 class Swc(object):
 
     def __init__(self, file_name=None):
@@ -188,7 +188,7 @@ class Swc(object):
         return np.array(
             [[node["x"], node["y"], node["z"]] for node in self.nodes.values()]
         )
-    
+
     def get_roots(self, return_coords=True):
         roots = []
         for nid, node in self.nodes.items():
@@ -196,7 +196,10 @@ class Swc(object):
             if pid == -1:
                 roots.append(nid)
         if return_coords:
-            return [[self.nodes[nid]["x"], self.nodes[nid]["y"], self.nodes[nid]["z"]] for nid in roots]
+            return [
+                [self.nodes[nid]["x"], self.nodes[nid]["y"], self.nodes[nid]["z"]]
+                for nid in roots
+            ]
         return roots
 
     def rescale(self, scale):
@@ -216,7 +219,7 @@ class Swc(object):
             self.bound_box[5] * scale[2],
         ]
         return self
-    
+
     def add_offset(self, offset):
         """
         Add an offset to the coordinates of all nodes.
@@ -381,7 +384,7 @@ class Swc(object):
                     nid_new = next_id
                     next_id += 1
                     # out.append((nid_new, p, r, 5, None))  # type=5 for inserted node
-                    out.append((nid_new, p, r, int(types[idx+1]), None))
+                    out.append((nid_new, p, r, int(types[idx + 1]), None))
 
             return out
 
@@ -543,14 +546,16 @@ class Swc(object):
         -------
 
         """
+        from swclib.data.swc_forest import SwcForest
+
         swc = self.resample(min_distance=dis, in_place=False)
-    
-        swc_tree = SwcTree(swc)
+
+        swc_tree = SwcForest(swc)
         components = swc_tree.get_components()
 
         coords, node_ids = [], []
         for comp in components:
-            if len(comp) <= 2+exclude_hops:
+            if len(comp) <= 2 + exclude_hops:
                 continue
             coord = nodes2coords(comp)
             coords.append(coord)
@@ -655,11 +660,11 @@ class Swc(object):
             dlist.append(found)
 
         dlist = np.sort(dlist)
-        dlist = dlist[:-int(len(dlist)*p)]
+        dlist = dlist[: -int(len(dlist) * p)]
         mean_dist = float(np.mean(dlist))
-        density = np.clip(1 - mean_dist/(dis*exclude_hops*2), 0.0, 1.0)
+        density = np.clip(1 - mean_dist / (dis * exclude_hops * 2), 0.0, 1.0)
         return float(density)
-    
+
     def remove_duplicate_nodes(
         self,
         use_radius: bool = False,
@@ -747,7 +752,9 @@ class Swc(object):
 
         # Optional: reindex node ids to compact 1..N
         if reindex:
-            old_to_new = {old_id: i + 1 for i, old_id in enumerate(sorted(new_nodes.keys()))}
+            old_to_new = {
+                old_id: i + 1 for i, old_id in enumerate(sorted(new_nodes.keys()))
+            }
             reindexed_nodes = {}
 
             for old_id in sorted(new_nodes.keys()):
@@ -779,8 +786,12 @@ class Swc(object):
             ys = [node["y"] for node in new_nodes.values()]
             zs = [node["z"] for node in new_nodes.values()]
             new_bound_box = [
-                min(xs), min(ys), min(zs),
-                max(xs), max(ys), max(zs),
+                min(xs),
+                min(ys),
+                min(zs),
+                max(xs),
+                max(ys),
+                max(zs),
             ]
         else:
             new_bound_box = [np.inf, np.inf, np.inf, 0, 0, 0]
@@ -796,7 +807,7 @@ class Swc(object):
             new_swc.edges = new_edges
             new_swc.bound_box = new_bound_box
             return new_swc
-        
+
     def save_to_swc(
         self,
         out_path: str,
