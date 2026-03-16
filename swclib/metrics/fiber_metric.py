@@ -21,6 +21,7 @@ class FiberMetric:
         resample_step=2.0,
         only_from_soma=False,
         with_direction=False,
+        use_category=False,
         eps=1e-6,
     ):
         self.iou_threshold = iou_threshold
@@ -32,6 +33,7 @@ class FiberMetric:
         self.resample_step = resample_step
         self.only_from_soma = only_from_soma
         self.with_direction = with_direction
+        self.use_category = use_category
         self.eps = eps
 
     def run(self, gold, pred, skip_center_dist=100, return_fibers=False, verbose=False):
@@ -89,12 +91,11 @@ class FiberMetric:
                     dist_sample=self.dist_sample,
                     dist_threshold=self.dist_threshold,
                 )
-                # if ious[i, j] > 0.98:
-                #     break
         cost = 1 - ious
         row_ind, col_ind = linear_sum_assignment(cost)
-        matches = []
+        matches,ious_matched = [], []
         for r, c in zip(row_ind, col_ind):
+            ious_matched.append(ious[r, c])
             if ious[r, c] >= self.iou_threshold:
                 matches.append((r, c, ious[r, c]))
         TP = len(matches)
@@ -103,19 +104,6 @@ class FiberMetric:
         precision = TP / (TP + FP) if (TP + FP) > 0 else 0.0
         recall = TP / (TP + FN) if (TP + FN) > 0 else 0.0
         f1 = 2 * precision * recall / (precision + recall + 1e-12)
-        # Subdivide by fiber types
-        ftypes = [fiber[-1].ntype for fiber in gold_fibers]
-        tp_a, tp_d = 0, 0
-        toatl_d = sum([1 for t in ftypes if t == 3 or t == 4])
-        toatl_a = sum([1 for t in ftypes if t == 2])
-        for i,j,iou in matches:
-            if ftypes[i] == 2:
-                tp_a += 1
-            elif ftypes[i] == 3 or ftypes[i] == 4:
-                tp_d += 1
-        recall_a = tp_a / (toatl_a + self.eps)
-        recall_d = tp_d / (toatl_d + self.eps)
-        mean_iou = np.mean(np.max(ious, axis=0))
         res = {
             "precision": precision,
             "recall": recall,
@@ -125,9 +113,8 @@ class FiberMetric:
             "TP": TP,
             "FP": FP,
             "FN": FN,
-            "axon_recall": recall_a,
-            "dendrite_recall": recall_d,
-            "mean_iou": mean_iou,
+            "iou_matched": sum(ious_matched) / len(ious_matched) if len(ious_matched) > 0 else 0.0,
+            "iou_all": sum(ious_matched) / max(Ng, Np) if max(Ng, Np) > 0 else 0.0,
             "ious": ious if return_fibers else None,
             "matches": matches if return_fibers else None,
             "FN_fiber_ids": (
@@ -138,4 +125,60 @@ class FiberMetric:
             "gold_fibers": gold_fibers if return_fibers else None,
             "pred_fibers": pred_fibers if return_fibers else None,
         }
+        # Subdivide by fiber types
+        if self.use_category:
+            assert self.with_direction == True, "use_category requires with_direction to be True"
+            pred_axon_ids = [j for j in range(Np) if pred_fibers[j][-1].ntype == 2]
+            pred_dendrite_ids = [j for j in range(Np) if pred_fibers[j][-1].ntype == 3 or pred_fibers[j][-1].ntype == 4]
+            gt_axon_ids = [i for i in range(Ng) if gold_fibers[i][-1].ntype == 2]
+            gt_dendrite_ids = [i for i in range(Ng) if gold_fibers[i][-1].ntype == 3 or gold_fibers[i][-1].ntype == 4]
+            axon_ious = ious[np.ix_(gt_axon_ids, pred_axon_ids)]
+            dendrite_ious = ious[np.ix_(gt_dendrite_ids, pred_dendrite_ids)]
+            # axon
+            cost = 1 - axon_ious
+            row_ind, col_ind = linear_sum_assignment(cost)
+            matches, iou_matched_axon = [], []
+            for r, c in zip(row_ind, col_ind):
+                iou_matched_axon.append(axon_ious[r, c])
+                if axon_ious[r, c] >= self.iou_threshold:
+                    matches.append((r, c, axon_ious[r, c]))
+            axon_TP = len(matches)
+            axon_FP = len(pred_axon_ids) - axon_TP
+            axon_FN = len(gt_axon_ids) - axon_TP
+            axon_precision = axon_TP / (axon_TP + FP) if (axon_TP + FP) > 0 else 0.0
+            axon_recall = axon_TP / (axon_TP + FN) if (axon_TP + FN) > 0 else 0.0
+            axon_f1 = 2 * axon_precision * axon_recall / (axon_precision + axon_recall + self.eps)
+
+            # dendrite
+            cost = 1 - dendrite_ious
+            row_ind, col_ind = linear_sum_assignment(cost)
+            matches, iou_matched_dendrite = [], []
+            for r, c in zip(row_ind, col_ind):
+                iou_matched_dendrite.append(dendrite_ious[r, c])
+                if dendrite_ious[r, c] >= self.iou_threshold:
+                    matches.append((r, c, dendrite_ious[r, c]))
+            dendrite_TP = len(matches)
+            dendrite_FP = len(pred_dendrite_ids) - dendrite_TP
+            dendrite_FN = len(gt_dendrite_ids) - dendrite_TP
+            dendrite_precision = dendrite_TP / (dendrite_TP + FP) if (dendrite_TP + FP) > 0 else 0.0
+            dendrite_recall = dendrite_TP / (dendrite_TP + FN) if (dendrite_TP + FN) > 0 else 0.0
+            dendrite_f1 = 2 * dendrite_precision * dendrite_recall / (dendrite_precision + dendrite_recall + self.eps)
+            res.update({
+                "axon_precision": axon_precision,
+                "axon_recall": axon_recall,
+                "axon_f1": axon_f1,
+                "axon_TP": axon_TP,
+                "axon_FP": axon_FP,
+                "axon_FN": axon_FN,
+                "iou_matched_axon": sum(iou_matched_axon) / len(iou_matched_axon) if len(iou_matched_axon) > 0 else 0.0,
+                "iou_all_axon": sum(iou_matched_axon) / max(len(gt_axon_ids), len(pred_axon_ids)) if max(len(gt_axon_ids), len(pred_axon_ids)) > 0 else 0.0,
+                "dendrite_precision": dendrite_precision,
+                "dendrite_recall": dendrite_recall,
+                "dendrite_f1": dendrite_f1,
+                "dendrite_TP": dendrite_TP,
+                "dendrite_FP": dendrite_FP,
+                "dendrite_FN": dendrite_FN,
+                "iou_matched_dendrite": sum(iou_matched_dendrite) / len(iou_matched_dendrite) if len(iou_matched_dendrite) > 0 else 0.0,
+                "iou_all_dendrite": sum(iou_matched_dendrite) / max(len(gt_dendrite_ids), len(pred_dendrite_ids)) if max(len(gt_dendrite_ids), len(pred_dendrite_ids)) > 0 else 0.0,
+            })
         return res

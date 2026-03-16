@@ -33,6 +33,15 @@ default_metric_params = {
 }
 
 default_metric_params_wb = {
+    "ssd": {
+        "min_distance": 2.0,
+        "scale": (1.0, 1.0, 1.0),
+    },
+    "length": {
+        "radius_threshold": 2,
+        "length_threshold": 0.2,
+        "scale": (1.0, 1.0, 1.0),
+    },
     "keypoints": {
         "keypoint_types": ["branch", "leaf"],
         "threshold_dis": 5,
@@ -45,7 +54,8 @@ default_metric_params_wb = {
         "align_roots": False,
         "scale": (1.0, 1.0, 1.0),
         "resample_step": 2.0,
-        "with_direction": True
+        "with_direction": True,
+        "use_category": True
     },
 }
 
