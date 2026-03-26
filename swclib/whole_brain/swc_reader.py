@@ -54,9 +54,14 @@ class SwcReader:
         id2idx = {int(i): k for k, i in enumerate(ids)}
         return ids, types, xs, ys, zs, rs, parents, id2idx
     
+    def add_offset(self, offset):
+        self.xs += offset[0]
+        self.ys += offset[1]
+        self.zs += offset[2]
+    
     def query_cube_mask(self, cube):
         xmin, ymin, zmin, xmax, ymax, zmax = cube
-        return (self.xs >= xmin) & (self.xs <= xmax) & (self.ys >= ymin) & (self.ys <= ymax) & (self.zs >= zmin) & (self.zs <= zmax)
+        return (self.xs >= xmin) & (self.xs < xmax) & (self.ys >= ymin) & (self.ys < ymax) & (self.zs >= zmin) & (self.zs < zmax)
     
     def check_cube_nonempty(self, cube):
         keep = self.query_cube_mask(cube)
@@ -68,6 +73,7 @@ class SwcReader:
         start: tuple[float, float, float],
         end: tuple[float, float, float],
         out_path: str,
+        out_r = None,
     ):
         keep = self.query_cube_mask([*start, *end])
         keep_idx = np.flatnonzero(keep)
@@ -103,5 +109,7 @@ class SwcReader:
             with open(out_path, "w", buffering=1024 * 1024) as f:
                 f.write(f"# cube: {start}->{end}\n")
                 for nid, t, x, y, z, r, pid_new in zip(new_ids, out_types, out_xs, out_ys, out_zs, out_rs, out_parents_new):
+                    if out_r is not None:
+                        r = out_r
                     f.write(f"{nid} {int(t)} {float(x):.6f} {float(y):.6f} {float(z):.6f} {float(r):.6f} {int(pid_new)}\n")
         return True

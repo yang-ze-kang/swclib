@@ -309,11 +309,11 @@ class SwcForest:
                 branch_list.append(node)
         return branch_list
 
-    def get_leaf_nodes(self):
+    def get_leaf_nodes(self, with_isolated_root=False):
         swc_list = self.get_node_list()
         leaf_list = []
         for node in swc_list:
-            if node.is_root() and len(node.children) == 1:
+            if with_isolated_root and node.is_root() and len(node.children) == 1:
                 leaf_list.append(node)
             if len(node.children) == 0:
                 leaf_list.append(node)
