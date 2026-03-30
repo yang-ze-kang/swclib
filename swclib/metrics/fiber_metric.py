@@ -22,6 +22,7 @@ class FiberMetric:
         only_from_soma=False,
         with_direction=False,
         use_category=False,
+        min_fiber_length=5.0,
         eps=1e-6,
     ):
         self.iou_threshold = iou_threshold
@@ -34,6 +35,7 @@ class FiberMetric:
         self.only_from_soma = only_from_soma
         self.with_direction = with_direction
         self.use_category = use_category
+        self.min_fiber_length = min_fiber_length
         self.eps = eps
 
     def run(self, gold, pred, skip_center_dist=100, return_fibers=False, verbose=False):
@@ -60,8 +62,8 @@ class FiberMetric:
         gold.rescale(self.scale)
         pred.rescale(self.scale)
 
-        gold_fibers = gold.get_fibers(self.only_from_soma)
-        pred_fibers = pred.get_fibers(self.only_from_soma)
+        gold_fibers = gold.get_fibers(self.only_from_soma, min_length=self.min_fiber_length)
+        pred_fibers = pred.get_fibers(self.only_from_soma, min_length=self.min_fiber_length)
         Ng, Np = len(gold_fibers), len(pred_fibers)
         fiber_length_gt = [f.length for f in gold_fibers]
         fiber_length_pred = [f.length for f in pred_fibers]

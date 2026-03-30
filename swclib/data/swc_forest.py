@@ -256,7 +256,7 @@ class SwcForest:
         assert root in self.roots
         self.roots.remove(root)
 
-    def get_node_list(self, update=False):
+    def get_node_list(self, update=True):
         if self.node_list is None or update:
             self.node_list = []
             q = queue.LifoQueue()
@@ -410,7 +410,7 @@ class SwcForest:
         return roots
 
     ## -- get fibers related functions -- ##
-    def get_fibers(self, only_from_soma=False):
+    def get_fibers(self, only_from_soma=False, min_length=0.0):
         fibers = []
         leaf_nodes = self.get_leaf_nodes()
         for node in leaf_nodes:
@@ -420,6 +420,8 @@ class SwcForest:
                 node = node.parent
             fiber.reverse()
             if len(fiber) > 1 and fiber not in fibers:
+                if fiber.length < min_length:
+                    continue
                 if only_from_soma and fiber[0].ntype == 1:
                     fibers.append(fiber)
                 elif not only_from_soma:
