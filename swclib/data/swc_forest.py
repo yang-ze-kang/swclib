@@ -68,7 +68,11 @@ class SwcForest:
         nodeDict = dict()
         for line in lines:
             if not line.strip().startswith("#"):
-                data = list(map(float, line.split()))
+                try:
+                    data = list(map(float, line.split()))
+                    assert len(data) == 7
+                except:
+                    raise Exception("[Error: SwcForest.load_list] Invalid swc format: {}".format(line))
                 if len(data) == 7:
                     nid = int(data[0])
                     ntype = int(data[1])
