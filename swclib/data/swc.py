@@ -28,7 +28,17 @@ def merge_swcs(swcs, *, offsets=None, keep_file_name=True):
         offsets = [(0.0, 0.0, 0.0)] * len(swcs)
     if len(offsets) != len(swcs):
         raise ValueError(f"offsets length {len(offsets)} != swcs length {len(swcs)}")
-
+    
+    if len(swcs) == 0:
+        return merged
+    
+    if len(swcs) == 1:
+        # Just copy the single SWC (with offset if needed)
+        swc = deepcopy(swcs[0])
+        if offsets[0] != (0.0, 0.0, 0.0):
+            swc.add_offset(offsets[0])
+        return swc
+    
     # ---- helpers: adapt these to your node structure ----
     def get_id(node):
         # node can be dict: node["id"]
