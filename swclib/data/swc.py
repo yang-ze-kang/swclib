@@ -893,7 +893,7 @@ class Swc(object):
 
             for old_id in node_ids:
                 n = self.nodes[old_id]
-                nid = old_to_new[old_id]
+                nid = old2new[old_id]
                 ntype_i = int(n["type"])
                 x = float(n["x"])
                 y = float(n["y"])
@@ -904,7 +904,7 @@ class Swc(object):
                 if old_parent == -1:
                     pid = -1
                 else:
-                    pid = old_to_new[old_parent]
+                    pid = old2new[old_parent]
 
                 f.write(
                     f"{nid} {ntype_i} "

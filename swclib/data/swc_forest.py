@@ -65,8 +65,13 @@ class SwcForest:
 
     def get_preorder_nodes(self):
         preorder_nodes = []
-        for root in self.roots:
-            preorder_nodes.extend(list(PreOrderIter(root)))
+        stack = [root for root in reversed(self.roots) if root is not None]
+
+        while stack:
+            node = stack.pop()
+            preorder_nodes.append(node)
+            stack.extend(reversed(node.children))
+
         return preorder_nodes
 
     def load_list(self, lines):
