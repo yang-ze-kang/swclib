@@ -16,6 +16,7 @@ default_metric_params = {
         "radius_threshold": 2,
         "length_threshold": 0.2,
         "scale": (1.0, 1.0, 1.0),
+        "resample_step": 2.0,
     },
     "keypoints": {
         "keypoint_types": ["branch", "leaf"],
@@ -29,6 +30,8 @@ default_metric_params = {
         "align_roots": True,
         "align_roots_thredhold": 20.0,
         "scale": (1.0, 1.0, 1.0),
+        "resample_step": 2.0,
+        "min_fiber_length": 5.0,
     },
 }
 
@@ -41,11 +44,13 @@ default_metric_params_wb = {
         "radius_threshold": 2,
         "length_threshold": 0.2,
         "scale": (1.0, 1.0, 1.0),
+        "resample_step": 2.0,
     },
     "keypoints": {
         "keypoint_types": ["branch", "leaf"],
         "threshold_dis": 5,
         "scale": (1.0, 1.0, 1.0),
+        "use_category": True
     },
     "fiber": {
         "iou_threshold": 0.75,
@@ -54,6 +59,7 @@ default_metric_params_wb = {
         "align_roots": False,
         "scale": (1.0, 1.0, 1.0),
         "resample_step": 2.0,
+        "min_fiber_length": 5.0,
         "with_direction": True,
         "use_category": True
     },

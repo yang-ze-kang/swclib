@@ -4,6 +4,7 @@ from rtree import index
 from pathlib import Path
 
 from swclib.data.swc_forest import SwcForest
+from swclib.data.swc import Swc
 from swclib.data import euclidean_point as euc_p
 
 DINF = 999999999999.0
@@ -572,11 +573,13 @@ class LengthMetric(object):
         radius_threshold=2.0,
         length_threshold=0.2,
         scale=(1.0, 1.0, 1.0),
+        resample_step=2.0,
         debug=False,
     ):
         self.radius_threshold = radius_threshold
         self.length_threshold = length_threshold
         self.scale = scale
+        self.resample_step = resample_step
         self.debug = debug
 
     def length_metric_run(
@@ -646,12 +649,12 @@ class LengthMetric(object):
             gold_total_length - match_length,
         )
 
-    def run(self, gold_swc_tree, test_swc_tree):
+    def run(self, gold, pred):
         """Main function of length metric.
         unpack config and run the matching function
         Args:
-            gold_swc_tree(SwcForest|str):
-            test_swc_tree(SwcForest|str):
+            gold(SwcForest|str):
+            pred(SwcForest|str):
         Example:
             test_tree = swc_node.SwcForest()
             gold_tree = swc_node.SwcForest()
@@ -667,20 +670,26 @@ class LengthMetric(object):
         Raises:
             None
         """
-        if isinstance(gold_swc_tree, str) or isinstance(gold_swc_tree, Path):
-            gold_swc_tree = SwcForest(gold_swc_tree)
-        if isinstance(test_swc_tree, str) or isinstance(test_swc_tree, Path):
-            test_swc_tree = SwcForest(test_swc_tree)
-        assert isinstance(gold_swc_tree, SwcForest)
-        assert isinstance(test_swc_tree, SwcForest)
+        if isinstance(gold, str) or isinstance(gold, Path):
+            if self.resample_step!=None:
+                gold = Swc(gold)
+                gold.resample(self.resample_step)
+            gold = SwcForest(gold)
+        if isinstance(pred, str) or isinstance(pred, Path):
+            if self.resample_step!=None:
+                pred = Swc(pred)
+                pred.resample(self.resample_step)
+            pred = SwcForest(pred)
+        assert isinstance(pred, SwcForest)
+        assert isinstance(gold, SwcForest)
 
-        gold_swc_tree.rescale(self.scale)
-        test_swc_tree.rescale(self.scale)
+        gold.rescale(self.scale)
+        pred.rescale(self.scale)
 
         # check every edge in test, if it is overlap with any edge in gold three
         recall, precision, TP, FP, FN = self.length_metric_run(
-            gold_swc_tree=gold_swc_tree,
-            test_swc_tree=test_swc_tree,
+            gold_swc_tree=gold,
+            test_swc_tree=pred,
             radius_threshold=self.radius_threshold,
             length_threshold=self.length_threshold,
         )

@@ -63,12 +63,24 @@ class SwcForest:
                 edges += 1
         return edges
 
+    def get_preorder_nodes(self):
+        preorder_nodes = []
+        for root in self.roots:
+            preorder_nodes.extend(list(PreOrderIter(root)))
+        return preorder_nodes
+
     def load_list(self, lines):
         self.clear()
         nodeDict = dict()
         for line in lines:
             if not line.strip().startswith("#"):
-                data = list(map(float, line.split()))
+                if line.strip() == "":
+                    continue
+                try:
+                    data = list(map(float, line.split()))
+                    assert len(data) == 7
+                except:
+                    raise Exception("[Error: SwcForest.load_list] Invalid swc format: {}".format(line))
                 if len(data) == 7:
                     nid = int(data[0])
                     ntype = int(data[1])
@@ -256,7 +268,7 @@ class SwcForest:
         assert root in self.roots
         self.roots.remove(root)
 
-    def get_node_list(self, update=False):
+    def get_node_list(self, update=True):
         if self.node_list is None or update:
             self.node_list = []
             q = queue.LifoQueue()
@@ -309,11 +321,11 @@ class SwcForest:
                 branch_list.append(node)
         return branch_list
 
-    def get_leaf_nodes(self):
+    def get_leaf_nodes(self, with_isolated_root=False):
         swc_list = self.get_node_list()
         leaf_list = []
         for node in swc_list:
-            if node.is_root() and len(node.children) == 1:
+            if with_isolated_root and node.is_root() and len(node.children) == 1:
                 leaf_list.append(node)
             if len(node.children) == 0:
                 leaf_list.append(node)
@@ -410,7 +422,7 @@ class SwcForest:
         return roots
 
     ## -- get fibers related functions -- ##
-    def get_fibers(self, only_from_soma=False):
+    def get_fibers(self, only_from_soma=False, min_length=0.0):
         fibers = []
         leaf_nodes = self.get_leaf_nodes()
         for node in leaf_nodes:
@@ -420,6 +432,8 @@ class SwcForest:
                 node = node.parent
             fiber.reverse()
             if len(fiber) > 1 and fiber not in fibers:
+                if fiber.length < min_length:
+                    continue
                 if only_from_soma and fiber[0].ntype == 1:
                     fibers.append(fiber)
                 elif not only_from_soma:

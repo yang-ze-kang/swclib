@@ -1,15 +1,11 @@
+from tracemalloc import start
+
 import rasterio
 from rasterio.windows import Window
 import tifffile
 import numpy as np
 import os
-
-
-import os
-import numpy as np
-import rasterio
-from rasterio.windows import Window
-import tifffile
+import re
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
 
@@ -19,25 +15,33 @@ class WBTReader:
     Supports reading arbitrary 3D regions from multiple 2D slice files
     """
 
-    def __init__(self, slice_dir):
+    def __init__(self, slice_dir, slice_name_pattern):
         self.slice_dir = slice_dir
         files = os.listdir(slice_dir)
-        files = sorted(files, key=lambda x: int(x.split("_")[2]))
-        for i, file in enumerate(files):
-            id = int(file.split("_")[2])
-            assert id == i + 1, id
-        self.slice_paths = [os.path.join(slice_dir, file) for file in files]
+        pattern = re.compile(slice_name_pattern)
+        files = sorted(files, key=lambda x: int(pattern.match(x).group(1)))
+        start_z = int(pattern.match(files[0]).group(1))
+        end_z  = int(pattern.match(files[-1]).group(1))
+        if start_z > 0:
+            self.slice_paths = [None] * start_z
+        self.slice_paths += [os.path.join(slice_dir, file) for file in files]
+        assert len(self.slice_paths) == end_z + 1, "Slice files are not continuous from 0 to max_z"
+        self.start_z = start_z
+        self.end_z = end_z
         self._init_dimensions()
 
     def _init_dimensions(self):
         if not self.slice_paths:
             raise ValueError("Slice directory is empty")
-        with rasterio.open(self.slice_paths[0], "r") as src:
+        with rasterio.open(self.slice_paths[self.start_z], "r") as src:
             self.height = src.height
             self.width = src.width
             self.dtype = src.dtypes[0]
 
         self.depth = len(self.slice_paths)
+
+    def get_bbox(self):
+        return ((0, 0, self.start_z), (self.width, self.height, self.end_z))
 
     def read_region(
         self,
@@ -96,7 +100,7 @@ class WBTReader:
     def _validate_coords(self, start, end, padding=None):
         z1, y1, x1 = start
         z2, y2, x2 = end
-        if z1 < 0 or (z2 > self.depth and padding != "right") or z1 >= z2:
+        if z1 < self.start_z or (z2 > self.depth and padding != "right") or z1 >= z2:
             raise ValueError(
                 f"Invalid Z coordinates: ({z1}, {z2}), valid range: [0, {self.depth})"
             )

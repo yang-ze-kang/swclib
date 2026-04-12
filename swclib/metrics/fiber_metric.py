@@ -22,6 +22,7 @@ class FiberMetric:
         only_from_soma=False,
         with_direction=False,
         use_category=False,
+        min_fiber_length=5.0,
         eps=1e-6,
     ):
         self.iou_threshold = iou_threshold
@@ -34,6 +35,7 @@ class FiberMetric:
         self.only_from_soma = only_from_soma
         self.with_direction = with_direction
         self.use_category = use_category
+        self.min_fiber_length = min_fiber_length
         self.eps = eps
 
     def run(self, gold, pred, skip_center_dist=100, return_fibers=False, verbose=False):
@@ -49,6 +51,51 @@ class FiberMetric:
             pred = SwcForest(pred)
         assert isinstance(pred, SwcForest)
         assert isinstance(gold, SwcForest)
+
+        # gt information
+        gold_fibers = gold.get_fibers(self.only_from_soma, min_length=self.min_fiber_length)
+        Ng = len(gold_fibers)
+
+        # if no predicted fibers
+        if pred.size() <= 1:
+            res = {
+                "precision": 0.0,
+                "recall": 0.0,
+                "f1_score": 0.0,
+                "num_gt": Ng,
+                "num_pred": 0,
+                "TP": 0,
+                "FP": 0,
+                "FN": Ng,
+                "iou_matched": 0.0,
+                "iou_all": 0.0,
+                "ious": None,
+                "matches": None,
+                "FN_fiber_ids": [list(range(Ng))] if return_fibers else None,
+                "gold_fibers": gold_fibers if return_fibers else None,
+                "pred_fibers": None,
+            }
+            if self.use_category:
+                res.update({
+                    "axon_precision": 0.0,
+                    "axon_recall": 0.0,
+                    "axon_f1": 0.0,
+                    "axon_TP": 0,
+                    "axon_FP": 0,
+                    "axon_FN": len([i for i in range(Ng) if gold_fibers[i][-1].ntype == 2]),
+                    "iou_matched_axon": 0.0,
+                    "iou_all_axon": 0.0,
+                    "dendrite_precision": 0.0,
+                    "dendrite_recall": 0.0,
+                    "dendrite_f1": 0.0,
+                    "dendrite_TP": 0,
+                    "dendrite_FP": 0,
+                    "dendrite_FN": len([i for i in range(Ng) if gold_fibers[i][-1].ntype == 3 or gold_fibers[i][-1].ntype == 4]),
+                    "iou_matched_dendrite": 0.0,
+                    "iou_all_dendrite": 0.0,
+                })
+            return res
+
         # align roots if needed
         if self.align_roots:
             roots = gold.get_roots(return_coords=True)
@@ -60,9 +107,9 @@ class FiberMetric:
         gold.rescale(self.scale)
         pred.rescale(self.scale)
 
-        gold_fibers = gold.get_fibers(self.only_from_soma)
-        pred_fibers = pred.get_fibers(self.only_from_soma)
-        Ng, Np = len(gold_fibers), len(pred_fibers)
+        
+        pred_fibers = pred.get_fibers(self.only_from_soma, min_length=self.min_fiber_length)
+        Np = len(pred_fibers)
         fiber_length_gt = [f.length for f in gold_fibers]
         fiber_length_pred = [f.length for f in pred_fibers]
         ious = np.zeros((Ng, Np))

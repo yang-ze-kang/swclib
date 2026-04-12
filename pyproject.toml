@@ -13,6 +13,7 @@ dependencies = [
   "scipy",
   "networkx",
   "rtree"
+  "rasterio"
 ]
 
 [tool.setuptools.packages.find]
