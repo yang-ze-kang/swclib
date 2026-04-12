@@ -63,11 +63,19 @@ class SwcForest:
                 edges += 1
         return edges
 
+    def get_preorder_nodes(self):
+        preorder_nodes = []
+        for root in self.roots:
+            preorder_nodes.extend(list(PreOrderIter(root)))
+        return preorder_nodes
+
     def load_list(self, lines):
         self.clear()
         nodeDict = dict()
         for line in lines:
             if not line.strip().startswith("#"):
+                if line.strip() == "":
+                    continue
                 try:
                     data = list(map(float, line.split()))
                     assert len(data) == 7

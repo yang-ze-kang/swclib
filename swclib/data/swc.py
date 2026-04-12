@@ -193,6 +193,22 @@ class Swc(object):
                     self.bound_box[2] = z
                 if z > self.bound_box[5]:
                     self.bound_box[5] = z
+    
+    @property
+    def length(self):
+        total_length = 0.0
+        for nid, pid in self.edges:
+            if pid == -1:
+                continue
+            if nid not in self.nodes or pid not in self.nodes:
+                continue
+            n1 = self.nodes[nid]
+            n2 = self.nodes[pid]
+            p1 = np.array([n1["x"], n1["y"], n1["z"]], dtype=float)
+            p2 = np.array([n2["x"], n2["y"], n2["z"]], dtype=float)
+            seg_len = np.linalg.norm(p1 - p2)
+            total_length += seg_len
+        return total_length
 
     def get_coords(self):
         return np.array(
@@ -827,6 +843,7 @@ class Swc(object):
         float_fmt: str = ".6f",
         mkdir: bool = True,
         reindex: bool = False,
+        radius: float = None,
     ) -> str:
         """
         Export current SWC to a .swc text file.
@@ -854,13 +871,17 @@ class Swc(object):
         if mkdir:
             os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
-        node_ids = list(self.nodes.keys())
-        if sort_by_id:
-            node_ids.sort()
-
         if reindex:
-            old_to_new = {old_id: i + 1 for i, old_id in enumerate(node_ids)}
+            from swclib.data.swc_forest import SwcForest
+            tree = SwcForest(self)
+            nodes = tree.get_preorder_nodes()
+            node_ids = [node.nid for node in nodes]
+            old2new = {old_id: i + 1 for i, old_id in enumerate(node_ids)}
+            node_ids = sorted(node_ids, key=lambda nid: old2new[nid])
         else:
+            node_ids = list(self.nodes.keys())
+            if sort_by_id:
+                node_ids.sort()
             old_to_new = {old_id: old_id for old_id in node_ids}
 
         with open(out_path, "w", encoding="utf-8") as f:
@@ -877,7 +898,7 @@ class Swc(object):
                 x = float(n["x"])
                 y = float(n["y"])
                 z = float(n["z"])
-                r = float(n["radius"])
+                r = float(radius) if radius is not None else float(n["radius"])
 
                 old_parent = int(n["parent"])
                 if old_parent == -1:

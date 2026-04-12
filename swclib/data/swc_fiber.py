@@ -52,7 +52,7 @@ class SwcFiber:
         return np.array([node.coord for node in self.nodes])
 
     @property
-    def length(self, update=False):
+    def length(self, update=True):
         if len(self.nodes) < 2:
             return 0.0
         if self._length is not None and not update:

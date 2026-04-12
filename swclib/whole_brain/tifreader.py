@@ -27,7 +27,7 @@ class WBTReader:
         self.slice_paths += [os.path.join(slice_dir, file) for file in files]
         assert len(self.slice_paths) == end_z + 1, "Slice files are not continuous from 0 to max_z"
         self.start_z = start_z
-        self.edn_z = end_z
+        self.end_z = end_z
         self._init_dimensions()
 
     def _init_dimensions(self):
@@ -39,6 +39,9 @@ class WBTReader:
             self.dtype = src.dtypes[0]
 
         self.depth = len(self.slice_paths)
+
+    def get_bbox(self):
+        return ((0, 0, self.start_z), (self.width, self.height, self.end_z))
 
     def read_region(
         self,
