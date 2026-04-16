@@ -192,8 +192,8 @@ class FiberMetric:
             axon_TP = len(matches)
             axon_FP = len(pred_axon_ids) - axon_TP
             axon_FN = len(gt_axon_ids) - axon_TP
-            axon_precision = axon_TP / (axon_TP + FP) if (axon_TP + FP) > 0 else 0.0
-            axon_recall = axon_TP / (axon_TP + FN) if (axon_TP + FN) > 0 else 0.0
+            axon_precision = axon_TP / (axon_TP + axon_FP) if (axon_TP + axon_FP) > 0 else 0.0
+            axon_recall = axon_TP / (axon_TP + axon_FN) if (axon_TP + axon_FN) > 0 else 0.0
             axon_f1 = 2 * axon_precision * axon_recall / (axon_precision + axon_recall + self.eps)
 
             # dendrite
@@ -207,8 +207,8 @@ class FiberMetric:
             dendrite_TP = len(matches)
             dendrite_FP = len(pred_dendrite_ids) - dendrite_TP
             dendrite_FN = len(gt_dendrite_ids) - dendrite_TP
-            dendrite_precision = dendrite_TP / (dendrite_TP + FP) if (dendrite_TP + FP) > 0 else 0.0
-            dendrite_recall = dendrite_TP / (dendrite_TP + FN) if (dendrite_TP + FN) > 0 else 0.0
+            dendrite_precision = dendrite_TP / (dendrite_TP + dendrite_FP) if (dendrite_TP + dendrite_FP) > 0 else 0.0
+            dendrite_recall = dendrite_TP / (dendrite_TP + dendrite_FN) if (dendrite_TP + dendrite_FN) > 0 else 0.0
             dendrite_f1 = 2 * dendrite_precision * dendrite_recall / (dendrite_precision + dendrite_recall + self.eps)
             res.update({
                 "axon_precision": axon_precision,

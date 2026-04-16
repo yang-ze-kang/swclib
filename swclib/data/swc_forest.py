@@ -74,6 +74,12 @@ class SwcForest:
 
         return preorder_nodes
 
+    def get_node_by_nid(self, nid):
+        for node in self.get_node_list():
+            if node.nid == nid:
+                return node
+        return None
+
     def load_list(self, lines):
         self.clear()
         nodeDict = dict()
@@ -273,7 +279,7 @@ class SwcForest:
         assert root in self.roots
         self.roots.remove(root)
 
-    def get_node_list(self, update=True):
+    def get_node_list(self, update=True, roi=None):
         if self.node_list is None or update:
             self.node_list = []
             q = queue.LifoQueue()
@@ -281,7 +287,8 @@ class SwcForest:
                 q.put(root)
             while not q.empty():
                 cur = q.get()
-                self.node_list.append(cur)
+                if roi is None or (roi is not None and cur.is_in_roi(roi)):
+                    self.node_list.append(cur)
                 for child in cur.children:
                     q.put(child)
         return self.node_list

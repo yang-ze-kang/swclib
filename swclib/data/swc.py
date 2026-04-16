@@ -882,7 +882,7 @@ class Swc(object):
             node_ids = list(self.nodes.keys())
             if sort_by_id:
                 node_ids.sort()
-            old_to_new = {old_id: old_id for old_id in node_ids}
+            old2new = {old_id: old_id for old_id in node_ids}
 
         with open(out_path, "w", encoding="utf-8") as f:
             if write_header:

@@ -108,6 +108,12 @@ class SwcFiber:
     ):
         coords1 = self.coords
         coords2 = fiber.coords
+        if coords1.ndim == 1:
+            coords1 = coords1[None, :]
+        if coords2.ndim == 1:
+            coords2 = coords2[None, :]
+        if len(coords1) < 2 or len(coords2) < 2:
+            return 0.0
         coords1 = self.cahce_resample_coords_by_distance(dist_sample)
         coords2 = resample_nodes_by_distance(coords2, dist_sample)
         tree1 = self.cahce_cKDTree(coords1)
