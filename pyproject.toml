@@ -12,8 +12,12 @@ dependencies = [
   "miniball",
   "scipy",
   "networkx",
-  "rtree"
-  "rasterio"
+  "rtree",
+  "rasterio",
+  "tifffile",
+  "scikit-image",
+  "opencv-python",
+  "tqdm"
 ]
 
 [tool.setuptools.packages.find]
