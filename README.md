@@ -1,8 +1,20 @@
 # swclib
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docs](https://img.shields.io/badge/docs-yang--ze--kang.github.io-blue)](https://yang-ze-kang.github.io/swclib/)
+![GitHub last commit](https://img.shields.io/github/last-commit/yang-ze-kang/swclib?style=flat-square)
+![GitHub issues](https://img.shields.io/github/issues/yang-ze-kang/swclib?style=flat-square)
+![GitHub stars](https://img.shields.io/github/stars/yang-ze-kang/swclib?style=flat-square)
+![GitHub code size](https://img.shields.io/github/languages/code-size/yang-ze-kang/swclib?style=flat-square)
+![GitHub top language](https://img.shields.io/github/languages/top/yang-ze-kang/swclib?style=flat-square)
+![PyPI version](https://img.shields.io/pypi/v/swclib?style=flat-square)
+![PyPI downloads](https://img.shields.io/pypi/dm/swclib?style=flat-square)
+
 A Python library for processing, converting, and evaluating neuron morphology data in [SWC format](http://www.neuronland.org/NLMorphologyConverter/MorphologyFormats/SWC/Docs/swcFormat.html).
 
 SWC is a standard file format in computational neuroscience for representing 3D reconstructions of neuronal structures (soma, axons, dendrites) as a tree of labeled points.
+
+📖 **Documentation:** https://yang-ze-kang.github.io/swclib/
 
 ## Features
 
