@@ -6,7 +6,6 @@
 ![GitHub issues](https://img.shields.io/github/issues/yang-ze-kang/swclib?style=flat-square)
 ![GitHub stars](https://img.shields.io/github/stars/yang-ze-kang/swclib?style=flat-square)
 ![GitHub code size](https://img.shields.io/github/languages/code-size/yang-ze-kang/swclib?style=flat-square)
-![GitHub top language](https://img.shields.io/github/languages/top/yang-ze-kang/swclib?style=flat-square)
 ![PyPI version](https://img.shields.io/pypi/v/swclib?style=flat-square)
 ![PyPI downloads](https://img.shields.io/pypi/dm/swclib?style=flat-square)
 
