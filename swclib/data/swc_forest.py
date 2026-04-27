@@ -246,7 +246,14 @@ class SwcForest:
     def add_tree(self, root):
         assert isinstance(root, SwcNode)
         self.roots.append(root)
-        for node in PreOrderIter(root):
+        # Use iterative traversal to avoid recursion depth limits on very deep trees.
+        stack = [root]
+        seen = set()
+        while stack:
+            node = stack.pop()
+            if node in seen:
+                continue
+            seen.add(node)
             if node.nid in self.id_set:
                 raise Exception(
                     "[Error: SwcForest.link_child]Node id {} already exists".format(
@@ -254,6 +261,9 @@ class SwcForest:
                     )
                 )
             self.id_set.add(node.nid)
+            children = list(node.children)
+            children.reverse()
+            stack.extend(children)
 
         self.length(force_update=True)
 
@@ -487,19 +497,24 @@ class SwcForest:
 
     def align_roots(self, root_coords, align_roots_thredhold=20.0):
         # find new roots
-        new_roots = []
+        root_min_dist = {}
         nodes, node_coords = self.get_node_list(), nodes2coords(self.get_node_list())
         kdTree = KDTree(node_coords)
         for rc in root_coords:
             dist, idx = kdTree.query(rc)
             if dist <= align_roots_thredhold:
-                new_roots.append(nodes[idx])
-        new_roots = list(set(new_roots))
+                node = nodes[idx]
+                prev = root_min_dist.get(node)
+                if prev is None or dist < prev:
+                    root_min_dist[node] = dist
+        new_roots = sorted(root_min_dist.keys(), key=lambda node: (root_min_dist[node], node.nid))
 
         # build new tree with new roots
         swc = SwcForest()
         vis = set()
         for root in new_roots:
+            if root in vis:
+                continue
             new_root, visited = root.get_rerooted_tree(
                 nid_start=swc.next_id(), return_old_nodes=True
             )
