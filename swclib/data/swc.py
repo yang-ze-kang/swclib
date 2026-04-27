@@ -228,6 +228,17 @@ class Swc(object):
             ]
         return roots
 
+    def _refresh_bound_box(self):
+        if len(self.nodes) == 0:
+            self.bound_box = [np.inf, np.inf, np.inf, 0, 0, 0]
+            return self.bound_box
+
+        xs = [node["x"] for node in self.nodes.values()]
+        ys = [node["y"] for node in self.nodes.values()]
+        zs = [node["z"] for node in self.nodes.values()]
+        self.bound_box = [min(xs), min(ys), min(zs), max(xs), max(ys), max(zs)]
+        return self.bound_box
+
     def rescale(self, scale):
         """
         Rescale the coordinates of all nodes by the given scale factor.
@@ -262,6 +273,32 @@ class Swc(object):
             self.bound_box[4] + offset[1],
             self.bound_box[5] + offset[2],
         ]
+        return self
+
+    def rotate_around_z_axis_line(self, xy_coord, angle, angle_in_degrees=True):
+        """
+        Rotate all nodes around the line parallel to the z-axis passing through (x, y).
+
+        Args:
+            x: x coordinate of the rotation axis.
+            y: y coordinate of the rotation axis.
+            angle: rotation angle.
+            angle_in_degrees: if True, interpret angle in degrees; otherwise in radians.
+        """
+        if angle_in_degrees:
+            angle = math.radians(angle)
+
+        x, y = xy_coord
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+
+        for node in self.nodes.values():
+            dx = node["x"] - x
+            dy = node["y"] - y
+            node["x"] = x + dx * cos_a - dy * sin_a
+            node["y"] = y + dx * sin_a + dy * cos_a
+
+        self._refresh_bound_box()
         return self
 
     def resample(self, min_distance=2.0, in_place=True):

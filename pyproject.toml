@@ -4,7 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swclib"
-version = "0.1"
+version = "0.1.0"
+description = "A Python library for processing, converting, and evaluating neuron morphology data in SWC format"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Yang Zekang", email = "yangzekang2000@163.com" }
+]
+keywords = ["neuron", "morphology", "SWC", "neuroscience", "reconstruction"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+requires-python = ">=3.8"
 
 dependencies = [
   "numpy",
@@ -12,9 +26,18 @@ dependencies = [
   "miniball",
   "scipy",
   "networkx",
-  "rtree"
-  "rasterio"
+  "rtree",
+  "rasterio",
+  "tifffile",
+  "scikit-image",
+  "opencv-python",
+  "tqdm"
 ]
+
+[project.urls]
+Homepage = "https://yang-ze-kang.github.io/swclib/"
+Repository = "https://github.com/yang-ze-kang/swclib"
+Issues = "https://github.com/yang-ze-kang/swclib/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
