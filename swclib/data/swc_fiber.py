@@ -115,9 +115,9 @@ class SwcFiber:
         if len(coords1) < 2 or len(coords2) < 2:
             return 0.0
         coords1 = self.cahce_resample_coords_by_distance(dist_sample)
-        coords2 = resample_nodes_by_distance(coords2, dist_sample)
+        coords2 = fiber.cahce_resample_coords_by_distance(dist_sample)
         tree1 = self.cahce_cKDTree(coords1)
-        tree2 = cKDTree(coords2)
+        tree2 = fiber.cahce_cKDTree(coords2)
         # fiber1->fiber2
         midpoints = (coords1[:-1] + coords1[1:]) * 0.5
         dists, _ = tree2.query(midpoints)

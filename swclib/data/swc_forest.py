@@ -6,7 +6,7 @@ import numpy as np
 from anytree import iterators, PreOrderIter
 import miniball
 from typing import TYPE_CHECKING
-from scipy.spatial import KDTree
+from scipy.spatial import KDTree, cKDTree
 import copy
 from collections import deque
 import heapq
@@ -34,6 +34,9 @@ class SwcForest:
         self.lca_parent = None
         self.node_list = None
         self.id_node_dict = None
+        self._nearest_nodes = None
+        self._nearest_coords = None
+        self._nearest_kdtree = None
 
         from swclib.data.swc import Swc
 
@@ -45,6 +48,11 @@ class SwcForest:
     def __contains__(self, nid):
         return nid in self.id_set
 
+    def _invalidate_nearest_cache(self):
+        self._nearest_nodes = None
+        self._nearest_coords = None
+        self._nearest_kdtree = None
+
     def size(self):
         self._size = len(self.id_set)
         return self._size
@@ -55,6 +63,9 @@ class SwcForest:
     def clear(self):
         self.roots = []
         self.id_set = set()
+        self.node_list = None
+        self.id_node_dict = None
+        self._invalidate_nearest_cache()
 
     def get_edge_num(self):
         edges = 0
@@ -187,6 +198,7 @@ class SwcForest:
         for node in self.get_node_list():
             for i in range(3):
                 node.coord[i] = node.coord[i] * scale[i]
+        self._invalidate_nearest_cache()
 
     def relocation(self, offset):
         """
@@ -195,6 +207,7 @@ class SwcForest:
         for node in self.get_node_list():
             for i in range(3):
                 node.coord[i] = node.coord[i] + offset[i]
+        self._invalidate_nearest_cache()
 
     def length(self, force_update=True):
         if self._total_length is not None and force_update == False:
@@ -225,6 +238,8 @@ class SwcForest:
         self.id_set.add(nid)
 
         self.length(force_update=True)
+        self.id_node_dict = None
+        self._invalidate_nearest_cache()
 
     # use this function if son use to be a part of this tree
     def link_child(self, pa, son):
@@ -241,6 +256,8 @@ class SwcForest:
             self.id_set.add(node.nid)
 
         self.length(force_update=True)
+        self.id_node_dict = None
+        self._invalidate_nearest_cache()
         return True
 
     def add_tree(self, root):
@@ -266,6 +283,8 @@ class SwcForest:
             stack.extend(children)
 
         self.length(force_update=True)
+        self.id_node_dict = None
+        self._invalidate_nearest_cache()
 
     def remove_node(self, node):
         assert isinstance(node, SwcNode)
@@ -283,11 +302,15 @@ class SwcForest:
             self.roots.append(son)
         self.id_set.remove(node.nid)
         self.length(force_update=True)
+        self.id_node_dict = None
+        self._invalidate_nearest_cache()
 
     def remove_tree(self, root):
         assert isinstance(root, SwcNode)
         assert root in self.roots
         self.roots.remove(root)
+        self.id_node_dict = None
+        self._invalidate_nearest_cache()
 
     def get_node_list(self, update=True, roi=None):
         if self.node_list is None or update:
@@ -357,16 +380,27 @@ class SwcForest:
         if topk <= 0:
             return []
 
-        nodes = self.get_node_list()
-        candidates = [(node.distance(coord), node) for node in nodes]
+        if self._nearest_kdtree is None:
+            self._nearest_nodes = self.get_node_list(update=True)
+            self._nearest_coords = np.array(
+                [node[:] for node in self._nearest_nodes],
+                dtype=float,
+            )
+            self._nearest_kdtree = cKDTree(self._nearest_coords)
 
-        nearest = heapq.nsmallest(topk, candidates, key=lambda x: x[0])
+        if len(self._nearest_nodes) == 0:
+            return [] if topk != 1 else (None, math.inf)
+
+        topk = min(topk, len(self._nearest_nodes))
+        dists, idxs = self._nearest_kdtree.query(coord, k=topk)
 
         if topk == 1:
-            dist, node = nearest[0]
-            return node, dist
+            return self._nearest_nodes[int(idxs)], float(dists)
 
-        return [(node, dist) for dist, node in nearest]
+        return [
+            (self._nearest_nodes[int(idx)], float(dist))
+            for dist, idx in zip(np.atleast_1d(dists), np.atleast_1d(idxs))
+        ]
 
     def get_somas(self):
         """The soma labeled as 1. The area near the soma is annotated with straight lines. It is assumed that the soma is a sphere."""
