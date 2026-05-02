@@ -33,6 +33,14 @@ class SwcFiber:
         self.resampled_coords = None
         self.last_sampled_dist = -1
         self.cktree = None
+        self._resample_cache = None
+
+    def _invalidate_cache(self):
+        self._length = None
+        self.resampled_coords = None
+        self.last_sampled_dist = -1
+        self.cktree = None
+        self._resample_cache = None
 
     def __len__(self):
         return len(self.nodes)
@@ -69,12 +77,16 @@ class SwcFiber:
 
     def append(self, node):
         self.nodes.append(node)
+        self._invalidate_cache()
 
     def pop(self):
-        self.nodes.pop()
+        node = self.nodes.pop()
+        self._invalidate_cache()
+        return node
 
     def reverse(self):
         self.nodes = self.nodes[::-1]
+        self._invalidate_cache()
         return self
 
     def copy(self):
@@ -91,17 +103,39 @@ class SwcFiber:
         else:
             return self.nodes[idx]
 
-    def cahce_resample_coords_by_distance(self, dist_sample):
-        if self.resampled_coords is not None and self.last_sampled_dist == dist_sample:
-            return self.resampled_coords
-        self.resampled_coords = resample_nodes_by_distance(self.coords, dist_sample)
+    def cache_resample_by_distance(self, dist_sample):
+        if (
+            self._resample_cache is not None
+            and self._resample_cache["dist_sample"] == dist_sample
+        ):
+            return self._resample_cache["coords"], self._resample_cache["tree"]
+
+        coords = resample_nodes_by_distance(self.coords, dist_sample)
+        tree = cKDTree(coords)
+        self._resample_cache = {
+            "dist_sample": dist_sample,
+            "coords": coords,
+            "tree": tree,
+        }
+
+        self.resampled_coords = coords
         self.last_sampled_dist = dist_sample
-        return self.resampled_coords
+        self.cktree = tree
+        return coords, tree
+
+    def cache_resample_coords_by_distance(self, dist_sample):
+        return self.cache_resample_by_distance(dist_sample)[0]
+
+    def cache_cKDTree(self, dist_sample):
+        return self.cache_resample_by_distance(dist_sample)[1]
+
+    def cahce_resample_coords_by_distance(self, dist_sample):
+        return self.cache_resample_coords_by_distance(dist_sample)
 
     def cahce_cKDTree(self, coords):
-        if self.cktree is None:
-            self.cktree = cKDTree(coords)
-        return self.cktree
+        if self.resampled_coords is coords and self.cktree is not None:
+            return self.cktree
+        return cKDTree(coords)
 
     def get_overlap_length_with(
         self, fiber: "SwcFiber", dist_sample=1.0, dist_threshold=3.0
@@ -114,10 +148,8 @@ class SwcFiber:
             coords2 = coords2[None, :]
         if len(coords1) < 2 or len(coords2) < 2:
             return 0.0
-        coords1 = self.cahce_resample_coords_by_distance(dist_sample)
-        coords2 = fiber.cahce_resample_coords_by_distance(dist_sample)
-        tree1 = self.cahce_cKDTree(coords1)
-        tree2 = fiber.cahce_cKDTree(coords2)
+        coords1, tree1 = self.cache_resample_by_distance(dist_sample)
+        coords2, tree2 = fiber.cache_resample_by_distance(dist_sample)
         # fiber1->fiber2
         midpoints = (coords1[:-1] + coords1[1:]) * 0.5
         dists, _ = tree2.query(midpoints)

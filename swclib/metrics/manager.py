@@ -5,12 +5,18 @@ from swclib.metrics.ssd_metric import SSDMetric
 from swclib.metrics.length_metric import LengthMetric
 from swclib.metrics.keypoint_metric import KeypointMetric
 from swclib.metrics.fiber_metric import FiberMetric
+from swclib.metrics.point_metric import PointMetric
 from swclib.utils.json import *
 
 default_metric_params = {
     "ssd": {
         "min_distance": 2.0,
         "scale": (1.0, 1.0, 1.0),
+    },
+    "points": {
+        "dist_threshold": 4,
+        "scale": (1.0, 1.0, 1.0),
+        "resample_step": 2.0,
     },
     "length": {
         "radius_threshold": 2,
@@ -39,6 +45,11 @@ default_metric_params_wb = {
     "ssd": {
         "min_distance": 2.0,
         "scale": (1.0, 1.0, 1.0),
+    },
+    "points": {
+        "dist_threshold": 4,
+        "scale": (1.0, 1.0, 1.0),
+        "resample_step": 2.0,
     },
     "length": {
         "radius_threshold": 2,
@@ -69,6 +80,7 @@ METRIC_MAP = {
     "ssd": SSDMetric,
     "length": LengthMetric,
     "keypoints": KeypointMetric,
+    "points": PointMetric,
     "fiber": FiberMetric,
 }
 
@@ -124,6 +136,33 @@ class MetricManager:
                 summary_result[name] = dict(total)
                 continue
             if self.collect_method == 'micro':
+                if name == 'points':
+                    S_G, S_hit_pred, S_miss, S_extra = 0, 0, 0, 0
+                    for res in self.results:
+                        S_G += res[name]['S_G']
+                        S_hit_pred += res[name]['S_hit_pred']
+                        S_miss += res[name]['S_miss']
+                        S_extra += res[name]['S_extra']
+                    precision = S_hit_pred / (S_hit_pred + S_extra) if (S_hit_pred + S_extra) > 0 else 0.0
+                    recall = (S_G - S_miss) / S_G if S_G > 0 else 0.0
+                    f1_score = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+                    summary_result[name] = {
+                        'precision': precision,
+                        'recall': recall,
+                        'f1_score': f1_score,
+                        'MES': (S_G - S_miss) / (S_G + S_extra) if (S_G + S_extra) > 0 else 0.0,
+                        'mes': (S_G - S_miss) / (S_G + S_extra) if (S_G + S_extra) > 0 else 0.0,
+                        'TP': S_hit_pred,
+                        'TP_pred': S_hit_pred,
+                        'TP_gold': S_G - S_miss,
+                        'FP': S_extra,
+                        'FN': S_miss,
+                        'S_G': S_G,
+                        'S_hit_pred': S_hit_pred,
+                        'S_miss': S_miss,
+                        'S_extra': S_extra,
+                    }
+                    continue
                 TP, FP, FN = 0, 0, 0
                 for res in self.results:
                     TP += res[name]['TP']
