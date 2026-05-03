@@ -382,13 +382,20 @@ class SwcForest:
 
         if self._nearest_kdtree is None:
             self._nearest_nodes = self.get_node_list(update=True)
-            self._nearest_coords = np.array(
-                [node[:] for node in self._nearest_nodes],
-                dtype=float,
-            )
-            self._nearest_kdtree = cKDTree(self._nearest_coords)
+            if len(self._nearest_nodes) == 0:
+                self._nearest_coords = np.empty((0, 3), dtype=float)
+                self._nearest_kdtree = None
+            else:
+                self._nearest_coords = np.asarray(
+                    [node[:] for node in self._nearest_nodes],
+                    dtype=float,
+                )
+                # cKDTree requires (n, m). Force 2D shape for singleton inputs.
+                if self._nearest_coords.ndim == 1:
+                    self._nearest_coords = self._nearest_coords.reshape(1, -1)
+                self._nearest_kdtree = cKDTree(self._nearest_coords)
 
-        if len(self._nearest_nodes) == 0:
+        if len(self._nearest_nodes) == 0 or self._nearest_kdtree is None:
             return [] if topk != 1 else (None, math.inf)
 
         topk = min(topk, len(self._nearest_nodes))
