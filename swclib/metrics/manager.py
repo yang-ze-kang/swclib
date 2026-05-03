@@ -13,7 +13,7 @@ default_metric_params = {
         "min_distance": 2.0,
         "scale": (1.0, 1.0, 1.0),
     },
-    "points": {
+    "point": {
         "dist_threshold": 4,
         "scale": (1.0, 1.0, 1.0),
         "resample_step": 2.0,
@@ -46,7 +46,7 @@ default_metric_params_wb = {
         "min_distance": 2.0,
         "scale": (1.0, 1.0, 1.0),
     },
-    "points": {
+    "point": {
         "dist_threshold": 4,
         "scale": (1.0, 1.0, 1.0),
         "resample_step": 2.0,
@@ -78,9 +78,9 @@ default_metric_params_wb = {
 
 METRIC_MAP = {
     "ssd": SSDMetric,
+    "point": PointMetric,
     "length": LengthMetric,
     "keypoints": KeypointMetric,
-    "points": PointMetric,
     "fiber": FiberMetric,
 }
 
