@@ -61,7 +61,7 @@ class FiberMetric:
             res = {
                 "precision": 0.0,
                 "recall": 0.0,
-                "f1_score": 0.0,
+                "f1": 0.0,
                 "num_gt": Ng,
                 "num_pred": 0,
                 "TP": 0,
@@ -154,7 +154,7 @@ class FiberMetric:
         res = {
             "precision": precision,
             "recall": recall,
-            "f1_score": f1,
+            "f1": f1,
             "num_gt": Ng,
             "num_pred": Np,
             "TP": TP,

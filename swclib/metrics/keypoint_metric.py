@@ -9,17 +9,32 @@ from swclib.data.swc_forest import SwcForest
 class KeypointMetric:
 
     def __init__(
-        self, keypoint_types=["branch", "leaf"], threshold_dis=5, scale=(0.35, 0.35, 1), use_category=False
+        self, keypoint_types=["branch", "leaf"], threshold_dis=5, scale=(0.35, 0.35, 1), use_category=False, mode="block",
     ):
         self.keypoint_types = keypoint_types
         self.threshold_dis = threshold_dis
         self.scale = scale
         self.use_category = use_category
+        self.mode = mode
+        assert mode in ["block", "whole"], "mode should be either 'block' or 'whole'"
 
     def _calculate(self, gold_coords, pred_coords):
+        # Normalize inputs to shape (N, 3) so empty keypoint sets do not
+        # become 1-D arrays and break broadcasting/indexing below.
+        gold_coords = np.asarray(gold_coords, dtype=float)
+        pred_coords = np.asarray(pred_coords, dtype=float)
+        if gold_coords.size == 0:
+            gold_coords = gold_coords.reshape(0, 3)
+        elif gold_coords.ndim == 1:
+            gold_coords = gold_coords.reshape(1, -1)
+        if pred_coords.size == 0:
+            pred_coords = pred_coords.reshape(0, 3)
+        elif pred_coords.ndim == 1:
+            pred_coords = pred_coords.reshape(1, -1)
+
         Ng = len(gold_coords)
         Np = len(pred_coords)
-        if Np == 0:
+        if Np == 0 or Ng == 0:
             TP = 0
         else:
             cost = np.linalg.norm(
@@ -56,8 +71,8 @@ class KeypointMetric:
             gold_keypoints.extend(gold.get_branch_nodes())
             pred_keypoints.extend(pred.get_branch_nodes())
         if "leaf" in self.keypoint_types:
-            gold_keypoints.extend(gold.get_leaf_nodes())
-            pred_keypoints.extend(pred.get_leaf_nodes())
+            gold_keypoints.extend(gold.get_leaf_nodes(with_isolated_root=self.mode == "block"))
+            pred_keypoints.extend(pred.get_leaf_nodes(with_isolated_root=self.mode == "block"))
         gold_keypoints = nodes2coords(gold_keypoints)
         pred_keypoints = nodes2coords(pred_keypoints)
 
@@ -88,8 +103,8 @@ class KeypointMetric:
                 "branch_num_gt": Ng,
                 "branch_num_pred": Np,
             })
-            gold_leafs = gold.get_leaf_nodes()
-            pred_leafs = pred.get_leaf_nodes()
+            gold_leafs = gold.get_leaf_nodes(with_isolated_root=self.mode == "block")
+            pred_leafs = pred.get_leaf_nodes(with_isolated_root=self.mode == "block")
             goldp = nodes2coords(gold_leafs)
             predp = nodes2coords(pred_leafs)
             Ng, Np, precision, recall, f1, TP, FP, FN = self._calculate(goldp, predp)

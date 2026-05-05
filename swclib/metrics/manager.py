@@ -28,6 +28,8 @@ default_metric_params = {
         "keypoint_types": ["branch", "leaf"],
         "threshold_dis": 5,
         "scale": (1.0, 1.0, 1.0),
+        "use_category": True,
+        "mode": "block",
     },
     "fiber": {
         "iou_threshold": 0.8,
@@ -61,7 +63,8 @@ default_metric_params_wb = {
         "keypoint_types": ["branch", "leaf"],
         "threshold_dis": 5,
         "scale": (1.0, 1.0, 1.0),
-        "use_category": True
+        "use_category": True,
+        "mode": "whole"
     },
     "fiber": {
         "iou_threshold": 0.75,
