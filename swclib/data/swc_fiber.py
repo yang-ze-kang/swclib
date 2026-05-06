@@ -3,7 +3,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 
-def resample_nodes_by_distance(nodes, distance=2):
+def resample_nodes_by_distance(nodes, distance=2, eps=1e-8):
     nodes = np.asarray(nodes)
     diffs = np.diff(nodes, axis=0)
     seg_lens = np.linalg.norm(diffs, axis=1)
@@ -11,6 +11,7 @@ def resample_nodes_by_distance(nodes, distance=2):
     total_len = cum_len[-1]
 
     target_lens = np.arange(0, total_len, distance)
+
     new_nodes = []
     for t in target_lens:
         idx = np.searchsorted(cum_len, t)
@@ -20,7 +21,11 @@ def resample_nodes_by_distance(nodes, distance=2):
             ratio = (t - cum_len[idx - 1]) / seg_lens[idx - 1]
             p = nodes[idx - 1] + ratio * diffs[idx - 1]
             new_nodes.append(p)
-    new_nodes.append(nodes[-1])
+
+    # Avoid duplicated endpoint caused by floating-point precision
+    if len(new_nodes) == 0 or np.linalg.norm(new_nodes[-1] - nodes[-1]) > eps:
+        new_nodes.append(nodes[-1])
+
     return np.array(new_nodes)
 
 
@@ -154,12 +159,14 @@ class SwcFiber:
         midpoints = (coords1[:-1] + coords1[1:]) * 0.5
         dists, _ = tree2.query(midpoints)
         mask = dists <= dist_threshold
-        overlap1 = np.sum(mask) * dist_sample
+        seglens1 = np.linalg.norm(coords1[1:] - coords1[:-1], axis=1)
+        overlap1 = np.sum(seglens1[mask])
         # fiber2->fiber1
         midpoints = (coords2[:-1] + coords2[1:]) * 0.5
         dists, _ = tree1.query(midpoints)
         mask = dists <= dist_threshold
-        overlap2 = np.sum(mask) * dist_sample
+        seglens2 = np.linalg.norm(coords2[1:] - coords2[:-1], axis=1)
+        overlap2 = np.sum(seglens2[mask])
         loverlap = (overlap1 + overlap2) / 2.0
         return loverlap
 
