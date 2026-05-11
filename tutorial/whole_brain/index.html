@@ -1076,16 +1076,20 @@
 <p>Whole-brain imaging datasets are typically stored as thousands of 2D TIFF slices rather than a single 3D volume. Loading the entire stack into memory is impractical. <code>WBTReader</code> addresses this by reading only the requested sub-region in parallel.</p>
 <hr />
 <h2 id="wbtreader"><code>WBTReader</code></h2>
-<p><code>WBTReader</code> reads a directory of 2D TIFF slices and exposes a 3D volume interface. Reads are parallelized with a thread or process pool.</p>
+<p><code>WBTReader</code> recursively reads a directory of 2D TIFF slices and exposes a 3D volume interface. Reads are parallelized with a thread or process pool.</p>
 <h3 id="setup">Setup</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">swclib.whole_brain.tifreader</span><span class="w"> </span><span class="kn">import</span> <span class="n">WBTReader</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">reader</span> <span class="o">=</span> <span class="n">WBTReader</span><span class="p">(</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">slice_dir</span><span class="o">=</span><span class="s2">&quot;/data/brain/xy_slices/&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">slice_name_pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;slice_(\d+)\.tif&quot;</span><span class="p">,</span>   <span class="c1"># regex with one capture group = Z index</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">slice_name_pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;slice_(\d+)\.tif&quot;</span><span class="p">,</span>   <span class="c1"># regex on file basename; group 1 = Z index</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">slice_ext</span><span class="o">=</span><span class="s2">&quot;.tif&quot;</span><span class="p">,</span>                         <span class="c1"># optional; default is &quot;.tif&quot;</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span>
 </code></pre></div>
-<p><code>slice_name_pattern</code> must contain exactly one capture group matching the Z index of each slice file.</p>
+<p><code>slice_dir</code> is searched recursively, including all subdirectories. <code>slice_ext</code>
+filters files by extension before sorting; pass values such as <code>.tiff</code> or
+<code>tiff</code> to read other TIFF extensions. <code>slice_name_pattern</code> must contain exactly
+one capture group matching the Z index of each slice file name.</p>
 <h3 id="inspect-volume-dimensions">Inspect volume dimensions</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">depth</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">get_dimensions</span><span class="p">()</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Volume: </span><span class="si">{</span><span class="n">depth</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">height</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">width</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -1094,8 +1098,8 @@
 </code></pre></div>
 <h3 id="read-a-3d-sub-region">Read a 3D sub-region</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">volume</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">read_region</span><span class="p">(</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">start</span><span class="o">=</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">z1</span><span class="p">),</span>        <span class="c1"># inclusive start corner (x, y, z)</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">end</span><span class="o">=</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">,</span> <span class="n">z2</span><span class="p">),</span>          <span class="c1"># exclusive end corner (x, y, z)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">start</span><span class="o">=</span><span class="p">(</span><span class="n">z1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">x1</span><span class="p">),</span>        <span class="c1"># inclusive start corner (z, y, x)</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">end</span><span class="o">=</span><span class="p">(</span><span class="n">z2</span><span class="p">,</span> <span class="n">y2</span><span class="p">,</span> <span class="n">x2</span><span class="p">),</span>          <span class="c1"># exclusive end corner (z, y, x)</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;tiff&quot;</span><span class="p">,</span>               <span class="c1"># backend: &quot;tiff&quot; or &quot;raster&quot;</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">num_workers</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>            <span class="c1"># parallel worker count</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">parallel_backend</span><span class="o">=</span><span class="s2">&quot;thread&quot;</span><span class="p">,</span> <span class="c1"># &quot;thread&quot; or &quot;process&quot;</span>
@@ -1151,18 +1155,19 @@
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">reader</span> <span class="o">=</span> <span class="n">WBTReader</span><span class="p">(</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">slice_dir</span><span class="o">=</span><span class="s2">&quot;/data/brain/slices/&quot;</span><span class="p">,</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">slice_name_pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;img_z(\d</span><span class="si">{4}</span><span class="s2">)\.tif&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># Read a local region around a neuron of interest</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">block</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">read_region</span><span class="p">(</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">start</span><span class="o">=</span><span class="p">(</span><span class="mi">2000</span><span class="p">,</span> <span class="mi">3000</span><span class="p">,</span> <span class="mi">100</span><span class="p">),</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">end</span><span class="o">=</span><span class="p">(</span><span class="mi">2512</span><span class="p">,</span> <span class="mi">3512</span><span class="p">,</span> <span class="mi">200</span><span class="p">),</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">num_workers</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="p">)</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Reconstruct SWC from local block</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">converter</span> <span class="o">=</span> <span class="n">Mask2Swc</span><span class="p">(</span><span class="n">voxel_size</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">converter</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">block</span><span class="p">,</span> <span class="s2">&quot;local_neuron.swc&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">slice_ext</span><span class="o">=</span><span class="s2">&quot;.tif&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Read a local region around a neuron of interest</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">block</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">read_region</span><span class="p">(</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">start</span><span class="o">=</span><span class="p">(</span><span class="mi">2000</span><span class="p">,</span> <span class="mi">3000</span><span class="p">,</span> <span class="mi">100</span><span class="p">),</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">end</span><span class="o">=</span><span class="p">(</span><span class="mi">2512</span><span class="p">,</span> <span class="mi">3512</span><span class="p">,</span> <span class="mi">200</span><span class="p">),</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">num_workers</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="p">)</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># Reconstruct SWC from local block</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">converter</span> <span class="o">=</span> <span class="n">Mask2Swc</span><span class="p">(</span><span class="n">voxel_size</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">converter</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">block</span><span class="p">,</span> <span class="s2">&quot;local_neuron.swc&quot;</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="swcreader-swc-file-loading-for-whole-brain-coordinates"><code>SwcReader</code> — SWC file loading for whole-brain coordinates</h2>

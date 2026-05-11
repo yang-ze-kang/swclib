@@ -1152,9 +1152,10 @@
 
 <h1 id="api-reference-whole-brain">API Reference — Whole Brain</h1>
 <h2 id="swclibwhole_braintifreaderwbtreader"><code>swclib.whole_brain.tifreader.WBTReader</code></h2>
-<p>Parallel reader for large 3D image stacks stored as 2D TIFF slices.</p>
+<p>Parallel reader for large 3D image stacks stored as 2D TIFF slices. The reader
+recursively scans the slice directory and all subdirectories.</p>
 <h3 id="constructor">Constructor</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">WBTReader</span><span class="p">(</span><span class="n">slice_dir</span><span class="p">,</span> <span class="n">slice_name_pattern</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">WBTReader</span><span class="p">(</span><span class="n">slice_dir</span><span class="p">,</span> <span class="n">slice_name_pattern</span><span class="p">,</span> <span class="n">slice_ext</span><span class="o">=</span><span class="s2">&quot;.tif&quot;</span><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1168,12 +1169,17 @@
 <tr>
 <td><code>slice_dir</code></td>
 <td><code>str</code></td>
-<td>Directory containing 2D TIFF slice files</td>
+<td>Directory containing 2D TIFF slice files; searched recursively</td>
 </tr>
 <tr>
 <td><code>slice_name_pattern</code></td>
 <td><code>str</code></td>
-<td>Regex with one capture group matching the Z index</td>
+<td>Regex with one capture group matching the Z index in each file basename</td>
+</tr>
+<tr>
+<td><code>slice_ext</code></td>
+<td><code>str</code></td>
+<td>File extension filter. Defaults to <code>.tif</code>; values without a leading dot are accepted</td>
 </tr>
 </tbody>
 </table>
@@ -1192,11 +1198,6 @@
 <td><code>slice_dir</code></td>
 <td><code>str</code></td>
 <td>Slice directory</td>
-</tr>
-<tr>
-<td><code>slice_name_pattern</code></td>
-<td><code>str</code></td>
-<td>Regex pattern</td>
 </tr>
 <tr>
 <td><code>start_z</code></td>
@@ -1251,13 +1252,13 @@
 <td><code>start</code></td>
 <td><code>tuple[int, int, int]</code></td>
 <td>—</td>
-<td>Inclusive start corner <code>(x, y, z)</code></td>
+<td>Inclusive start corner <code>(z, y, x)</code></td>
 </tr>
 <tr>
 <td><code>end</code></td>
 <td><code>tuple[int, int, int]</code></td>
 <td>—</td>
-<td>Exclusive end corner <code>(x, y, z)</code></td>
+<td>Exclusive end corner <code>(z, y, x)</code></td>
 </tr>
 <tr>
 <td><code>mode</code></td>
