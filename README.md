@@ -238,22 +238,25 @@ summary = manager.collect(save_path="results.json")
 
 ### Whole-Brain Image Reader
 
-Efficient parallel reader for large tiled TIFF stacks:
+Efficient parallel reader for large TIFF stacks. `WBTReader` recursively scans
+the slice directory and all subdirectories for files matching `slice_ext`
+(default: `.tif`), then sorts them by the Z index captured from each file name.
 
 ```python
 from swclib.whole_brain.tifreader import WBTReader
 
 reader = WBTReader(
     slice_dir="/data/brain/slices/",
-    slice_name_pattern=r"slice_(\d+)\.tif",
+    slice_name_pattern=r"slice_(\d+)\.tif",  # regex on file basename; group 1 = Z index
+    slice_ext=".tif",                        # optional; default is ".tif"
 )
 
 depth, height, width = reader.get_dimensions()
 
-# Read a 3D sub-region (start and end are (x, y, z) tuples)
+# Read a 3D sub-region (start and end are (z, y, x) tuples)
 volume = reader.read_region(
-    start=(1000, 1000, 100),
-    end=(1500, 1500, 200),
+    start=(100, 1000, 1000),
+    end=(200, 1500, 1500),
     mode="tiff",
     num_workers=16,
 )

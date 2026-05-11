@@ -2,18 +2,20 @@
 
 ## `swclib.whole_brain.tifreader.WBTReader`
 
-Parallel reader for large 3D image stacks stored as 2D TIFF slices.
+Parallel reader for large 3D image stacks stored as 2D TIFF slices. The reader
+recursively scans the slice directory and all subdirectories.
 
 ### Constructor
 
 ```python
-WBTReader(slice_dir, slice_name_pattern)
+WBTReader(slice_dir, slice_name_pattern, slice_ext=".tif")
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `slice_dir` | `str` | Directory containing 2D TIFF slice files |
-| `slice_name_pattern` | `str` | Regex with one capture group matching the Z index |
+| `slice_dir` | `str` | Directory containing 2D TIFF slice files; searched recursively |
+| `slice_name_pattern` | `str` | Regex with one capture group matching the Z index in each file basename |
+| `slice_ext` | `str` | File extension filter. Defaults to `.tif`; values without a leading dot are accepted |
 
 **Example pattern:** `r"slice_(\d+)\.tif"` matches `slice_0042.tif` with Z index `42`.
 
@@ -22,7 +24,6 @@ WBTReader(slice_dir, slice_name_pattern)
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `slice_dir` | `str` | Slice directory |
-| `slice_name_pattern` | `str` | Regex pattern |
 | `start_z` | `int` | Minimum Z index found |
 | `end_z` | `int` | Maximum Z index found |
 | `height` | `int` | Slice height (Y dimension) |
@@ -44,8 +45,8 @@ Read a 3D sub-region from the slice stack.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `start` | `tuple[int, int, int]` | — | Inclusive start corner `(x, y, z)` |
-| `end` | `tuple[int, int, int]` | — | Exclusive end corner `(x, y, z)` |
+| `start` | `tuple[int, int, int]` | — | Inclusive start corner `(z, y, x)` |
+| `end` | `tuple[int, int, int]` | — | Exclusive end corner `(z, y, x)` |
 | `mode` | `str` | `'tiff'` | Backend: `'tiff'` (tifffile) or `'raster'` (rasterio) |
 | `num_workers` | `int` | `32` | Number of parallel workers |
 | `parallel_backend` | `str` | `'thread'` | `'thread'` or `'process'` |

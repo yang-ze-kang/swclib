@@ -6,7 +6,7 @@ Whole-brain imaging datasets are typically stored as thousands of 2D TIFF slices
 
 ## `WBTReader`
 
-`WBTReader` reads a directory of 2D TIFF slices and exposes a 3D volume interface. Reads are parallelized with a thread or process pool.
+`WBTReader` recursively reads a directory of 2D TIFF slices and exposes a 3D volume interface. Reads are parallelized with a thread or process pool.
 
 ### Setup
 
@@ -15,11 +15,15 @@ from swclib.whole_brain.tifreader import WBTReader
 
 reader = WBTReader(
     slice_dir="/data/brain/xy_slices/",
-    slice_name_pattern=r"slice_(\d+)\.tif",   # regex with one capture group = Z index
+    slice_name_pattern=r"slice_(\d+)\.tif",   # regex on file basename; group 1 = Z index
+    slice_ext=".tif",                         # optional; default is ".tif"
 )
 ```
 
-`slice_name_pattern` must contain exactly one capture group matching the Z index of each slice file.
+`slice_dir` is searched recursively, including all subdirectories. `slice_ext`
+filters files by extension before sorting; pass values such as `.tiff` or
+`tiff` to read other TIFF extensions. `slice_name_pattern` must contain exactly
+one capture group matching the Z index of each slice file name.
 
 ### Inspect volume dimensions
 
@@ -34,8 +38,8 @@ print(f"Volume: {depth} x {height} x {width}")
 
 ```python
 volume = reader.read_region(
-    start=(x1, y1, z1),        # inclusive start corner (x, y, z)
-    end=(x2, y2, z2),          # exclusive end corner (x, y, z)
+    start=(z1, y1, x1),        # inclusive start corner (z, y, x)
+    end=(z2, y2, x2),          # exclusive end corner (z, y, x)
     mode="tiff",               # backend: "tiff" or "raster"
     num_workers=16,            # parallel worker count
     parallel_backend="thread", # "thread" or "process"
@@ -67,6 +71,7 @@ from swclib.image.mask2swc import Mask2Swc
 reader = WBTReader(
     slice_dir="/data/brain/slices/",
     slice_name_pattern=r"img_z(\d{4})\.tif",
+    slice_ext=".tif",
 )
 
 # Read a local region around a neuron of interest
