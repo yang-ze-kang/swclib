@@ -116,8 +116,8 @@ class FiberMetric:
         for i in tqdm(range(Ng), desc="Calculating fiber IoUs", disable=not verbose):
             for j in range(Np):
                 if (
-                    fiber_length_gt[i] / (fiber_length_pred[j] + self.eps) < 0.5
-                    and fiber_length_pred[j] / (fiber_length_gt[i] + self.eps) < 0.5
+                    fiber_length_gt[i] / (fiber_length_pred[j] + self.eps) < min(0.5, self.iou_threshold)
+                    or fiber_length_pred[j] / (fiber_length_gt[i] + self.eps) < min(0.5, self.iou_threshold)
                 ): # early stop by max length
                     ious[i, j] = min(fiber_length_gt[i], fiber_length_pred[j]) / max(fiber_length_gt[i], fiber_length_pred[j])
                     continue

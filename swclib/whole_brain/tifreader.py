@@ -15,16 +15,25 @@ class WBTReader:
     Supports reading arbitrary 3D regions from multiple 2D slice files
     """
 
-    def __init__(self, slice_dir, slice_name_pattern):
+    def __init__(self, slice_dir, slice_name_pattern, slice_ext=".tif"):
         self.slice_dir = slice_dir
-        files = os.listdir(slice_dir)
+        slice_ext = slice_ext.lower()
+        if not slice_ext.startswith("."):
+            slice_ext = "." + slice_ext
+        files = [
+            os.path.join(root, file)
+            for root, _, filenames in os.walk(slice_dir)
+            for file in filenames
+            if file.lower().endswith(slice_ext)
+        ]
         pattern = re.compile(slice_name_pattern)
-        files = sorted(files, key=lambda x: int(pattern.match(x).group(1)))
-        start_z = int(pattern.match(files[0]).group(1))
-        end_z  = int(pattern.match(files[-1]).group(1))
+        files = sorted(files, key=lambda x: int(pattern.match(os.path.basename(x)).group(1)))
+        start_z = int(pattern.match(os.path.basename(files[0])).group(1))
+        end_z  = int(pattern.match(os.path.basename(files[-1])).group(1))
+        self.slice_paths = []
         if start_z > 0:
             self.slice_paths = [None] * start_z
-        self.slice_paths += [os.path.join(slice_dir, file) for file in files]
+        self.slice_paths += files
         assert len(self.slice_paths) == end_z + 1, "Slice files are not continuous from 0 to max_z"
         self.start_z = start_z
         self.end_z = end_z
