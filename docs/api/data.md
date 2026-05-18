@@ -55,13 +55,14 @@ Translate all node coordinates.
 
 ---
 
-#### `resample(min_distance=2.0, in_place=True)`
+#### `resample(min_distance=2.0, in_place=True, round_mode=False)`
 Upsample or downsample the tree so consecutive nodes are approximately `min_distance` apart.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `min_distance` | `float` | `2.0` | Target spacing |
 | `in_place` | `bool` | `True` | Modify in place or return new `Swc` |
+| `round_mode` | `bool` | `False` | If `True`, move each segment endpoint to the nearest multiple of `min_distance`; tails shorter than half a step are dropped, otherwise extended |
 
 ---
 

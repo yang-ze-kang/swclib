@@ -40,6 +40,7 @@ swc.add_offset((100.0, 200.0, 50.0))
 
 ```python
 swc.resample(min_distance=2.0)
+swc.resample(min_distance=2.0, round_mode=True)  # round segment ends to the nearest step
 ```
 
 ### Removing duplicate nodes
