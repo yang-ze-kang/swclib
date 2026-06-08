@@ -107,43 +107,6 @@ class SwcNode(NodeMixin):
                 q.put(child)
         return node_list
     
-    def get_subtree(self, nid_start=1, ntype=None):
-        """Returns a SwcForest holding a copy of the subtree rooted at this node.
-
-        The subtree is deep-copied into fresh nodes (with new contiguous ids
-        starting at ``nid_start``), so the original tree is left untouched and
-        this node becomes the root of the returned forest.
-
-        Args:
-          nid_start : the id assigned to the copied root; descendants follow.
-          ntype : if given, override the node type of every copied node.
-        """
-        from swclib.data.swc_forest import SwcForest
-
-        node_list = self.get_subtree_node_list()
-        old2new = {}
-        for old in node_list:
-            old2new[old] = SwcNode(
-                nid=nid_start,
-                ntype=old.ntype if ntype is None else ntype,
-                coord=copy.deepcopy(old.coord),
-                radius=old.radius,
-            )
-            nid_start += 1
-
-        # node_list is in preorder (root first), so parents are linked before
-        # their children and root_length can be accumulated in the same pass.
-        for old in node_list:
-            new = old2new[old]
-            if old is self:
-                continue
-            new.parent = old2new[old.parent]
-            new.root_length = new.parent.root_length + new.parent_distance()
-
-        forest = SwcForest()
-        forest.add_tree(old2new[self])
-        return forest
-
     def get_subtree_length(self, force_update=False):
         node_list = self.get_subtree_node_list()
         result = 0
