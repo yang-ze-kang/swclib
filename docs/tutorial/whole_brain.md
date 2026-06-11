@@ -95,6 +95,11 @@ For whole-brain SWC files with large coordinate values, use `SwcReader` from the
 ```python
 from swclib.whole_brain.swc_reader import SwcReader
 
-nodes = SwcReader.read("whole_brain_neuron.swc")
-# returns numpy array of shape (N, 7): [id, type, x, y, z, radius, parent]
+reader = SwcReader("whole_brain_neuron.swc")
+swc = reader.read_region(
+    start=(1000, 2000, 300),
+    end=(1500, 2500, 400),
+    out_path="local_neuron.swc",
+)
+# returns a swclib.data.swc.Swc object in local coordinates
 ```
