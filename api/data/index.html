@@ -818,10 +818,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#resamplemin_distance20-in_placetrue" class="md-nav__link">
+  <a href="#resamplemin_distance20-in_placetrue-round_modefalse" class="md-nav__link">
     <span class="md-ellipsis">
       
-        resample(min_distance=2.0, in_place=True)
+        resample(min_distance=2.0, in_place=True, round_mode=False)
       
     </span>
   </a>
@@ -855,6 +855,17 @@
     <span class="md-ellipsis">
       
         get_roots(return_coords=True)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_regionstart-end-out_pathnone-out_rnone-swc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_region(start, end, out_path=None, out_r=None) → Swc
       
     </span>
   </a>
@@ -1316,10 +1327,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#resamplemin_distance20-in_placetrue" class="md-nav__link">
+  <a href="#resamplemin_distance20-in_placetrue-round_modefalse" class="md-nav__link">
     <span class="md-ellipsis">
       
-        resample(min_distance=2.0, in_place=True)
+        resample(min_distance=2.0, in_place=True, round_mode=False)
       
     </span>
   </a>
@@ -1353,6 +1364,17 @@
     <span class="md-ellipsis">
       
         get_roots(return_coords=True)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_regionstart-end-out_pathnone-out_rnone-swc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_region(start, end, out_path=None, out_r=None) → Swc
       
     </span>
   </a>
@@ -1746,7 +1768,7 @@
 </tbody>
 </table>
 <hr />
-<h4 id="resamplemin_distance20-in_placetrue"><code>resample(min_distance=2.0, in_place=True)</code></h4>
+<h4 id="resamplemin_distance20-in_placetrue-round_modefalse"><code>resample(min_distance=2.0, in_place=True, round_mode=False)</code></h4>
 <p>Upsample or downsample the tree so consecutive nodes are approximately <code>min_distance</code> apart.</p>
 <table>
 <thead>
@@ -1769,6 +1791,12 @@
 <td><code>bool</code></td>
 <td><code>True</code></td>
 <td>Modify in place or return new <code>Swc</code></td>
+</tr>
+<tr>
+<td><code>round_mode</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>If <code>True</code>, move each segment endpoint to the nearest multiple of <code>min_distance</code>; tails shorter than half a step are dropped, otherwise extended</td>
 </tr>
 </tbody>
 </table>
@@ -1830,10 +1858,51 @@
 <td><code>return_coords</code></td>
 <td><code>bool</code></td>
 <td><code>True</code></td>
-<td>If <code>True</code>, returns <code>ndarray</code>; else returns list of node dicts</td>
+<td>If <code>True</code>, returns root coordinates as lists; else returns root node IDs</td>
 </tr>
 </tbody>
 </table>
+<hr />
+<h4 id="read_regionstart-end-out_pathnone-out_rnone-swc"><code>read_region(start, end, out_path=None, out_r=None) → Swc</code></h4>
+<p>Return a local-coordinate SWC containing nodes inside a cube.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start</code></td>
+<td><code>tuple[float, float, float]</code></td>
+<td>—</td>
+<td>Inclusive corner <code>(x, y, z)</code></td>
+</tr>
+<tr>
+<td><code>end</code></td>
+<td><code>tuple[float, float, float]</code></td>
+<td>—</td>
+<td>Exclusive corner <code>(x, y, z)</code></td>
+</tr>
+<tr>
+<td><code>out_path</code></td>
+<td><code>str</code> or <code>None</code></td>
+<td><code>None</code></td>
+<td>Optional path to save the cropped SWC</td>
+</tr>
+<tr>
+<td><code>out_r</code></td>
+<td><code>float</code> or <code>None</code></td>
+<td><code>None</code></td>
+<td>Optional output radius override</td>
+</tr>
+</tbody>
+</table>
+<p>Nodes are reindexed to <code>1..N</code>. Kept nodes whose parents fall outside the cube
+become roots.</p>
 <hr />
 <h4 id="get_densitydis100-p03-exclude_hops1-float"><code>get_density(dis=10.0, p=0.3, exclude_hops=1) → float</code></h4>
 <p>Estimates local spatial density of the neuron.</p>
@@ -1972,9 +2041,9 @@
 <td>Nodes with 0 children</td>
 </tr>
 <tr>
-<td><code>get_roots(return_coords=True)</code></td>
+<td><code>get_roots(return_coords=False)</code></td>
 <td><code>list[SwcNode]</code> or <code>ndarray</code></td>
-<td>Root nodes</td>
+<td>Root nodes or root coordinates</td>
 </tr>
 <tr>
 <td><code>get_somas()</code></td>

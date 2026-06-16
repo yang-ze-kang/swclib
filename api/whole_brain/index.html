@@ -889,10 +889,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#read_regionstart-end-modetiff-num_workers32-parallel_backendthread-paddingnone-ndarray" class="md-nav__link">
+  <a href="#read_regionstart-end-moderaster-num_workers32-parallel_backendthread-paddingnone-ndarray" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_region(start, end, mode='tiff', num_workers=32, parallel_backend='thread', padding=None) → ndarray
+        read_region(start, end, mode='raster', num_workers=32, parallel_backend='thread', padding=None) → ndarray
       
     </span>
   </a>
@@ -922,22 +922,33 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#static-method" class="md-nav__link">
+  <a href="#constructor_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Static method
+        Constructor
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Static method">
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methods_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#swcreaderreadpath-ndarray" class="md-nav__link">
+  <a href="#read_regionstart-end-out_pathnone-out_rnone-swc" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SwcReader.read(path) → ndarray
+        read_region(start, end, out_path=None, out_r=None) → Swc
       
     </span>
   </a>
@@ -1065,10 +1076,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#read_regionstart-end-modetiff-num_workers32-parallel_backendthread-paddingnone-ndarray" class="md-nav__link">
+  <a href="#read_regionstart-end-moderaster-num_workers32-parallel_backendthread-paddingnone-ndarray" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_region(start, end, mode='tiff', num_workers=32, parallel_backend='thread', padding=None) → ndarray
+        read_region(start, end, mode='raster', num_workers=32, parallel_backend='thread', padding=None) → ndarray
       
     </span>
   </a>
@@ -1098,22 +1109,33 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#static-method" class="md-nav__link">
+  <a href="#constructor_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Static method
+        Constructor
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Static method">
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methods_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#swcreaderreadpath-ndarray" class="md-nav__link">
+  <a href="#read_regionstart-end-out_pathnone-out_rnone-swc" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SwcReader.read(path) → ndarray
+        read_region(start, end, out_path=None, out_r=None) → Swc
       
     </span>
   </a>
@@ -1236,7 +1258,7 @@ recursively scans the slice directory and all subdirectories.</p>
 <p>Returns <code>(depth, height, width)</code>.</p>
 <h4 id="get_bbox-tuple"><code>get_bbox() → tuple</code></h4>
 <p>Returns <code>((x1, y1, z1), (x2, y2, z2))</code> bounding box.</p>
-<h4 id="read_regionstart-end-modetiff-num_workers32-parallel_backendthread-paddingnone-ndarray"><code>read_region(start, end, mode='tiff', num_workers=32, parallel_backend='thread', padding=None) → ndarray</code></h4>
+<h4 id="read_regionstart-end-moderaster-num_workers32-parallel_backendthread-paddingnone-ndarray"><code>read_region(start, end, mode='raster', num_workers=32, parallel_backend='thread', padding=None) → ndarray</code></h4>
 <p>Read a 3D sub-region from the slice stack.</p>
 <table>
 <thead>
@@ -1263,8 +1285,8 @@ recursively scans the slice directory and all subdirectories.</p>
 <tr>
 <td><code>mode</code></td>
 <td><code>str</code></td>
-<td><code>'tiff'</code></td>
-<td>Backend: <code>'tiff'</code> (tifffile) or <code>'raster'</code> (rasterio)</td>
+<td><code>'raster'</code></td>
+<td>Backend: <code>'raster'</code> (rasterio) or <code>'tiff'</code> (tifffile)</td>
 </tr>
 <tr>
 <td><code>num_workers</code></td>
@@ -1290,8 +1312,9 @@ recursively scans the slice directory and all subdirectories.</p>
 <hr />
 <h2 id="swclibwhole_brainswc_readerswcreader"><code>swclib.whole_brain.swc_reader.SwcReader</code></h2>
 <p>Minimal SWC reader for large whole-brain coordinate files.</p>
-<h3 id="static-method">Static method</h3>
-<h4 id="swcreaderreadpath-ndarray"><code>SwcReader.read(path) → ndarray</code></h4>
+<h3 id="constructor_1">Constructor</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">SwcReader</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">rescale</span><span class="o">=</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+</code></pre></div>
 <table>
 <thead>
 <tr>
@@ -1306,9 +1329,56 @@ recursively scans the slice directory and all subdirectories.</p>
 <td><code>str</code></td>
 <td>SWC file path</td>
 </tr>
+<tr>
+<td><code>rescale</code></td>
+<td><code>tuple[float, float, float]</code></td>
+<td>Coordinate scale applied while loading <code>(sx, sy, sz)</code></td>
+</tr>
 </tbody>
 </table>
-<p>Returns: <code>ndarray</code> of shape <code>(N, 7)</code> with columns <code>[id, type, x, y, z, radius, parent]</code>.</p>
+<h3 id="methods_1">Methods</h3>
+<h4 id="read_regionstart-end-out_pathnone-out_rnone-swc"><code>read_region(start, end, out_path=None, out_r=None) → Swc</code></h4>
+<p>Read nodes inside a whole-brain coordinate cube and return a local-coordinate
+<code>Swc</code> object. Nodes are reindexed to <code>1..N</code>; nodes whose parent falls outside
+the region become roots.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start</code></td>
+<td><code>tuple[float, float, float]</code></td>
+<td>—</td>
+<td>Inclusive start corner <code>(x, y, z)</code></td>
+</tr>
+<tr>
+<td><code>end</code></td>
+<td><code>tuple[float, float, float]</code></td>
+<td>—</td>
+<td>Exclusive end corner <code>(x, y, z)</code></td>
+</tr>
+<tr>
+<td><code>out_path</code></td>
+<td><code>str</code> or <code>None</code></td>
+<td><code>None</code></td>
+<td>Optional path to save the returned SWC</td>
+</tr>
+<tr>
+<td><code>out_r</code></td>
+<td><code>float</code> or <code>None</code></td>
+<td><code>None</code></td>
+<td>Optional radius override for returned and saved nodes</td>
+</tr>
+</tbody>
+</table>
+<p>Returns: <code>Swc</code> object containing the cropped region. Empty regions return an
+empty <code>Swc</code>.</p>
 
 
 

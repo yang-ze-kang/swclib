@@ -897,10 +897,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#runmask-swc_path-soma_pathnone-radius01-verbosefalse-str" class="md-nav__link">
+  <a href="#runmask-swc_path-soma_pathnone-radius01-verbosfalse-str" class="md-nav__link">
     <span class="md-ellipsis">
       
-        run(mask, swc_path, soma_path=None, radius=0.1, verbose=False) → str
+        run(mask, swc_path, soma_path=None, radius=0.1, verbos=False) → str
       
     </span>
   </a>
@@ -963,10 +963,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#refine_fibersg-smooth_window_size-smooth_poly-node_sample_distance-voxel_size-nxgraph" class="md-nav__link">
+  <a href="#refine_fibersg-smooth_window_size-smooth_ploy-node_sample_distance-voxel_size-nxgraph" class="md-nav__link">
     <span class="md-ellipsis">
       
-        refine_fibers(G, smooth_window_size, smooth_poly, node_sample_distance, voxel_size) → nx.Graph
+        refine_fibers(G, smooth_window_size, smooth_ploy, node_sample_distance, voxel_size) → nx.Graph
       
     </span>
   </a>
@@ -1212,10 +1212,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#runmask-swc_path-soma_pathnone-radius01-verbosefalse-str" class="md-nav__link">
+  <a href="#runmask-swc_path-soma_pathnone-radius01-verbosfalse-str" class="md-nav__link">
     <span class="md-ellipsis">
       
-        run(mask, swc_path, soma_path=None, radius=0.1, verbose=False) → str
+        run(mask, swc_path, soma_path=None, radius=0.1, verbos=False) → str
       
     </span>
   </a>
@@ -1278,10 +1278,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#refine_fibersg-smooth_window_size-smooth_poly-node_sample_distance-voxel_size-nxgraph" class="md-nav__link">
+  <a href="#refine_fibersg-smooth_window_size-smooth_ploy-node_sample_distance-voxel_size-nxgraph" class="md-nav__link">
     <span class="md-ellipsis">
       
-        refine_fibers(G, smooth_window_size, smooth_poly, node_sample_distance, voxel_size) → nx.Graph
+        refine_fibers(G, smooth_window_size, smooth_ploy, node_sample_distance, voxel_size) → nx.Graph
       
     </span>
   </a>
@@ -1458,16 +1458,18 @@
 <p>Converts a 3D binary mask to an SWC reconstruction.</p>
 <h3 id="constructor_1">Constructor</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">Mask2Swc</span><span class="p">(</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">voxel_size</span><span class="o">=</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">connectivity</span><span class="o">=</span><span class="mi">26</span><span class="p">,</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">thres_fiber_min_len</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">thres_branch_min_len</span><span class="o">=</span><span class="mf">15.0</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">thres_segment_merge_angle</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">thres_segment_merge_dist</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">smooth_window_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">smooth_poly</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">node_sample_distance</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="p">)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">voxel_size</span><span class="o">=</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="o">/</span><span class="mf">0.35</span><span class="p">),</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">thres_soma_degree</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">thres_segment_merge_short_dis</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">thres_segment_merge_long_dis</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">thres_segment_merge_angle</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">connectivity</span><span class="o">=</span><span class="mi">26</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">thres_fiber_min_len</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">thres_branch_min_len</span><span class="o">=</span><span class="mf">15.0</span><span class="p">,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">smooth_window_size</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">smooth_ploy</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">node_sample_distance</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1482,8 +1484,32 @@
 <tr>
 <td><code>voxel_size</code></td>
 <td><code>tuple</code></td>
-<td><code>(1,1,1)</code></td>
+<td><code>(1,1,1/0.35)</code></td>
 <td>Physical voxel size <code>(sx, sy, sz)</code> in µm</td>
+</tr>
+<tr>
+<td><code>thres_soma_degree</code></td>
+<td><code>int</code></td>
+<td><code>4</code></td>
+<td>Degree threshold used by soma handling</td>
+</tr>
+<tr>
+<td><code>thres_segment_merge_short_dis</code></td>
+<td><code>float</code></td>
+<td><code>3.0</code></td>
+<td>Short endpoint distance threshold for merging</td>
+</tr>
+<tr>
+<td><code>thres_segment_merge_long_dis</code></td>
+<td><code>float</code></td>
+<td><code>20.0</code></td>
+<td>Long endpoint distance threshold for merging</td>
+</tr>
+<tr>
+<td><code>thres_segment_merge_angle</code></td>
+<td><code>float</code></td>
+<td><code>30.0</code></td>
+<td>Max angle (degrees) for fiber merging</td>
 </tr>
 <tr>
 <td><code>connectivity</code></td>
@@ -1504,28 +1530,16 @@
 <td>Min length (µm) to keep a side branch</td>
 </tr>
 <tr>
-<td><code>thres_segment_merge_angle</code></td>
-<td><code>float</code> or <code>None</code></td>
-<td><code>None</code></td>
-<td>Max angle (°) for fiber merging</td>
-</tr>
-<tr>
-<td><code>thres_segment_merge_dist</code></td>
-<td><code>float</code> or <code>None</code></td>
-<td><code>None</code></td>
-<td>Max endpoint distance for merging</td>
-</tr>
-<tr>
 <td><code>smooth_window_size</code></td>
-<td><code>int</code> or <code>None</code></td>
-<td><code>None</code></td>
+<td><code>int</code></td>
+<td><code>7</code></td>
 <td>Savitzky-Golay smoothing window</td>
 </tr>
 <tr>
-<td><code>smooth_poly</code></td>
-<td><code>int</code> or <code>None</code></td>
-<td><code>None</code></td>
-<td>Savitzky-Golay polynomial order</td>
+<td><code>smooth_ploy</code></td>
+<td><code>int</code></td>
+<td><code>2</code></td>
+<td>Savitzky-Golay polynomial order. The parameter name follows the current source spelling</td>
 </tr>
 <tr>
 <td><code>node_sample_distance</code></td>
@@ -1536,7 +1550,7 @@
 </tbody>
 </table>
 <h3 id="methods_1">Methods</h3>
-<h4 id="runmask-swc_path-soma_pathnone-radius01-verbosefalse-str"><code>run(mask, swc_path, soma_path=None, radius=0.1, verbose=False) → str</code></h4>
+<h4 id="runmask-swc_path-soma_pathnone-radius01-verbosfalse-str"><code>run(mask, swc_path, soma_path=None, radius=0.1, verbos=False) → str</code></h4>
 <p>Runs the full conversion pipeline and writes the SWC file.</p>
 <table>
 <thead>
@@ -1568,9 +1582,9 @@
 <td>Default node radius in output SWC</td>
 </tr>
 <tr>
-<td><code>verbose</code></td>
+<td><code>verbos</code></td>
 <td><code>bool</code></td>
-<td>Print pipeline statistics</td>
+<td>Print pipeline statistics. The parameter name follows the current source spelling</td>
 </tr>
 </tbody>
 </table>
@@ -1586,7 +1600,7 @@
 <p>Removes fibers shorter than the threshold.</p>
 <h4 id="remove_short_branchsg-voxel_size-thres_min_len-nxgraph-int"><code>remove_short_branchs(G, voxel_size, thres_min_len) → (nx.Graph, int)</code></h4>
 <p>Prunes side branches shorter than the threshold.</p>
-<h4 id="refine_fibersg-smooth_window_size-smooth_poly-node_sample_distance-voxel_size-nxgraph"><code>refine_fibers(G, smooth_window_size, smooth_poly, node_sample_distance, voxel_size) → nx.Graph</code></h4>
+<h4 id="refine_fibersg-smooth_window_size-smooth_ploy-node_sample_distance-voxel_size-nxgraph"><code>refine_fibers(G, smooth_window_size, smooth_ploy, node_sample_distance, voxel_size) → nx.Graph</code></h4>
 <p>Applies Savitzky-Golay smoothing and uniform resampling to all fibers.</p>
 
 
