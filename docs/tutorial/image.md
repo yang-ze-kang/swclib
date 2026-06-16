@@ -120,20 +120,21 @@ The soma file format matches the output of `SwcSoma.save_somas_to_file`.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `voxel_size` | `(1,1,1)` | Physical voxel dimensions (sx, sy, sz) in µm |
+| `voxel_size` | `(1,1,1/0.35)` | Physical voxel dimensions (sx, sy, sz) in µm |
 | `connectivity` | `26` | Neighbor connectivity for skeletonization (`6` or `26`) |
 | `thres_fiber_min_len` | `20.0` | Minimum length to keep an isolated fiber (µm) |
 | `thres_branch_min_len` | `15.0` | Minimum length to keep a side branch (µm) |
-| `thres_segment_merge_angle` | — | Max angle (°) between fibers to be merged |
-| `thres_segment_merge_dist` | — | Max endpoint distance for fiber merging (µm) |
-| `smooth_window_size` | — | Savitzky-Golay smoothing window size |
-| `smooth_poly` | — | Savitzky-Golay polynomial order |
+| `thres_segment_merge_short_dis` | `3.0` | Short endpoint distance threshold for fiber merging (µm) |
+| `thres_segment_merge_long_dis` | `20.0` | Long endpoint distance threshold for fiber merging (µm) |
+| `thres_segment_merge_angle` | `30.0` | Max angle (°) between fibers to be merged |
+| `smooth_window_size` | `7` | Savitzky-Golay smoothing window size |
+| `smooth_ploy` | `2` | Savitzky-Golay polynomial order; name follows current source spelling |
 | `node_sample_distance` | `2.0` | Output node spacing after resampling |
 
 ### Verbose mode
 
 ```python
-converter.run(mask, "output.swc", verbose=True)
+converter.run(mask, "output.swc", verbos=True)
 # Prints step-by-step statistics for each pipeline stage
 ```
 

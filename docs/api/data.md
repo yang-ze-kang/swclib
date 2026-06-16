@@ -87,7 +87,22 @@ Returns nodes with `parent_id == -1`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `return_coords` | `bool` | `True` | If `True`, returns `ndarray`; else returns list of node dicts |
+| `return_coords` | `bool` | `True` | If `True`, returns root coordinates as lists; else returns root node IDs |
+
+---
+
+#### `read_region(start, end, out_path=None, out_r=None) → Swc`
+Return a local-coordinate SWC containing nodes inside a cube.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `start` | `tuple[float, float, float]` | — | Inclusive corner `(x, y, z)` |
+| `end` | `tuple[float, float, float]` | — | Exclusive corner `(x, y, z)` |
+| `out_path` | `str` or `None` | `None` | Optional path to save the cropped SWC |
+| `out_r` | `float` or `None` | `None` | Optional output radius override |
+
+Nodes are reindexed to `1..N`. Kept nodes whose parents fall outside the cube
+become roots.
 
 ---
 
@@ -152,7 +167,7 @@ SwcForest(swc=None)
 | `get_node_by_nid(nid)` | `SwcNode` | ID → node lookup |
 | `get_branch_nodes()` | `list[SwcNode]` | Nodes with ≥ 2 children |
 | `get_leaf_nodes()` | `list[SwcNode]` | Nodes with 0 children |
-| `get_roots(return_coords=True)` | `list[SwcNode]` or `ndarray` | Root nodes |
+| `get_roots(return_coords=False)` | `list[SwcNode]` or `ndarray` | Root nodes or root coordinates |
 | `get_somas()` | `list[SwcSoma]` | Soma regions |
 | `get_fibers(only_from_soma=False, min_length=0.0)` | `list[SwcFiber]` | All root-to-leaf paths |
 | `get_fibers_by_roi(roi)` | `list[SwcFiber]` | Fibers passing through ROI |

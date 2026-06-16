@@ -1284,7 +1284,7 @@
 <tbody>
 <tr>
 <td><code>voxel_size</code></td>
-<td><code>(1,1,1)</code></td>
+<td><code>(1,1,1/0.35)</code></td>
 <td>Physical voxel dimensions (sx, sy, sz) in µm</td>
 </tr>
 <tr>
@@ -1303,24 +1303,29 @@
 <td>Minimum length to keep a side branch (µm)</td>
 </tr>
 <tr>
+<td><code>thres_segment_merge_short_dis</code></td>
+<td><code>3.0</code></td>
+<td>Short endpoint distance threshold for fiber merging (µm)</td>
+</tr>
+<tr>
+<td><code>thres_segment_merge_long_dis</code></td>
+<td><code>20.0</code></td>
+<td>Long endpoint distance threshold for fiber merging (µm)</td>
+</tr>
+<tr>
 <td><code>thres_segment_merge_angle</code></td>
-<td>—</td>
+<td><code>30.0</code></td>
 <td>Max angle (°) between fibers to be merged</td>
 </tr>
 <tr>
-<td><code>thres_segment_merge_dist</code></td>
-<td>—</td>
-<td>Max endpoint distance for fiber merging (µm)</td>
-</tr>
-<tr>
 <td><code>smooth_window_size</code></td>
-<td>—</td>
+<td><code>7</code></td>
 <td>Savitzky-Golay smoothing window size</td>
 </tr>
 <tr>
-<td><code>smooth_poly</code></td>
-<td>—</td>
-<td>Savitzky-Golay polynomial order</td>
+<td><code>smooth_ploy</code></td>
+<td><code>2</code></td>
+<td>Savitzky-Golay polynomial order; name follows current source spelling</td>
 </tr>
 <tr>
 <td><code>node_sample_distance</code></td>
@@ -1330,7 +1335,7 @@
 </tbody>
 </table>
 <h3 id="verbose-mode">Verbose mode</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">converter</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="s2">&quot;output.swc&quot;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">converter</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="s2">&quot;output.swc&quot;</span><span class="p">,</span> <span class="n">verbos</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Prints step-by-step statistics for each pipeline stage</span>
 </code></pre></div>
 <hr />

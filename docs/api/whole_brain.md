@@ -39,7 +39,7 @@ Returns `(depth, height, width)`.
 #### `get_bbox() → tuple`
 Returns `((x1, y1, z1), (x2, y2, z2))` bounding box.
 
-#### `read_region(start, end, mode='tiff', num_workers=32, parallel_backend='thread', padding=None) → ndarray`
+#### `read_region(start, end, mode='raster', num_workers=32, parallel_backend='thread', padding=None) → ndarray`
 
 Read a 3D sub-region from the slice stack.
 
@@ -47,7 +47,7 @@ Read a 3D sub-region from the slice stack.
 |-----------|------|---------|-------------|
 | `start` | `tuple[int, int, int]` | — | Inclusive start corner `(z, y, x)` |
 | `end` | `tuple[int, int, int]` | — | Exclusive end corner `(z, y, x)` |
-| `mode` | `str` | `'tiff'` | Backend: `'tiff'` (tifffile) or `'raster'` (rasterio) |
+| `mode` | `str` | `'raster'` | Backend: `'raster'` (rasterio) or `'tiff'` (tifffile) |
 | `num_workers` | `int` | `32` | Number of parallel workers |
 | `parallel_backend` | `str` | `'thread'` | `'thread'` or `'process'` |
 | `padding` | `tuple` or `None` | `None` | Optional padding `(px, py, pz)` added to each side |

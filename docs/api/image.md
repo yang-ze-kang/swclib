@@ -66,33 +66,37 @@ Converts a 3D binary mask to an SWC reconstruction.
 
 ```python
 Mask2Swc(
-    voxel_size=(1.0, 1.0, 1.0),
+    voxel_size=(1.0, 1.0, 1.0/0.35),
+    thres_soma_degree=4,
+    thres_segment_merge_short_dis=3.0,
+    thres_segment_merge_long_dis=20.0,
+    thres_segment_merge_angle=30.0,
     connectivity=26,
     thres_fiber_min_len=20.0,
     thres_branch_min_len=15.0,
-    thres_segment_merge_angle=None,
-    thres_segment_merge_dist=None,
-    smooth_window_size=None,
-    smooth_poly=None,
+    smooth_window_size=7,
+    smooth_ploy=2,
     node_sample_distance=2.0,
 )
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `voxel_size` | `tuple` | `(1,1,1)` | Physical voxel size `(sx, sy, sz)` in µm |
+| `voxel_size` | `tuple` | `(1,1,1/0.35)` | Physical voxel size `(sx, sy, sz)` in µm |
+| `thres_soma_degree` | `int` | `4` | Degree threshold used by soma handling |
+| `thres_segment_merge_short_dis` | `float` | `3.0` | Short endpoint distance threshold for merging |
+| `thres_segment_merge_long_dis` | `float` | `20.0` | Long endpoint distance threshold for merging |
+| `thres_segment_merge_angle` | `float` | `30.0` | Max angle (degrees) for fiber merging |
 | `connectivity` | `int` | `26` | Neighbor connectivity for skeleton: `6` or `26` |
 | `thres_fiber_min_len` | `float` | `20.0` | Min length (µm) to keep an isolated fiber |
 | `thres_branch_min_len` | `float` | `15.0` | Min length (µm) to keep a side branch |
-| `thres_segment_merge_angle` | `float` or `None` | `None` | Max angle (°) for fiber merging |
-| `thres_segment_merge_dist` | `float` or `None` | `None` | Max endpoint distance for merging |
-| `smooth_window_size` | `int` or `None` | `None` | Savitzky-Golay smoothing window |
-| `smooth_poly` | `int` or `None` | `None` | Savitzky-Golay polynomial order |
+| `smooth_window_size` | `int` | `7` | Savitzky-Golay smoothing window |
+| `smooth_ploy` | `int` | `2` | Savitzky-Golay polynomial order. The parameter name follows the current source spelling |
 | `node_sample_distance` | `float` | `2.0` | Output node spacing after resampling |
 
 ### Methods
 
-#### `run(mask, swc_path, soma_path=None, radius=0.1, verbose=False) → str`
+#### `run(mask, swc_path, soma_path=None, radius=0.1, verbos=False) → str`
 
 Runs the full conversion pipeline and writes the SWC file.
 
@@ -102,7 +106,7 @@ Runs the full conversion pipeline and writes the SWC file.
 | `swc_path` | `str` | Output SWC file path |
 | `soma_path` | `str` or `None` | Optional soma annotation file |
 | `radius` | `float` | Default node radius in output SWC |
-| `verbose` | `bool` | Print pipeline statistics |
+| `verbos` | `bool` | Print pipeline statistics. The parameter name follows the current source spelling |
 
 Returns: Output SWC file path (str).
 
@@ -128,6 +132,6 @@ Removes fibers shorter than the threshold.
 
 Prunes side branches shorter than the threshold.
 
-#### `refine_fibers(G, smooth_window_size, smooth_poly, node_sample_distance, voxel_size) → nx.Graph`
+#### `refine_fibers(G, smooth_window_size, smooth_ploy, node_sample_distance, voxel_size) → nx.Graph`
 
 Applies Savitzky-Golay smoothing and uniform resampling to all fibers.

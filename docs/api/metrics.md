@@ -8,6 +8,10 @@ result = metric.run(gold_swc_path, pred_swc_path)
 
 Returns a `dict`.
 
+Both file paths and in-memory `SwcForest` objects are accepted by most metrics.
+When a metric accepts `scale`, it multiplies SWC coordinates by `(sx, sy, sz)`
+before comparison.
+
 ---
 
 ## `swclib.metrics.ssd_metric.SSDMetric`
@@ -54,19 +58,21 @@ Edge-level path coverage metric.
 
 ```python
 LengthMetric(
-    radius_threshold=5.0,
-    length_threshold=2.0,
+    radius_threshold=2.0,
+    length_threshold=0.2,
     scale=(1, 1, 1),
-    resample_step=1.0,
+    resample_step=2.0,
+    debug=False,
 )
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `radius_threshold` | `float` | `5.0` | Spatial tolerance for edge matching (µm) |
-| `length_threshold` | `float` | `2.0` | Minimum edge length to evaluate (µm) |
+| `radius_threshold` | `float` | `2.0` | Spatial tolerance for edge matching (µm) |
+| `length_threshold` | `float` | `0.2` | Minimum edge overlap length to count as matched (µm) |
 | `scale` | `tuple` | `(1,1,1)` | Coordinate scaling |
-| `resample_step` | `float` | `1.0` | Resampling step for edge comparison |
+| `resample_step` | `float` | `2.0` | Resampling step before edge comparison; use `None` to skip |
+| `debug` | `bool` | `False` | Print intermediate matching information |
 
 ### `run(gold, pred) → dict`
 
@@ -76,12 +82,10 @@ LengthMetric(
 |-----|------|-------------|
 | `precision` | `float` | Predicted length that matches gold |
 | `recall` | `float` | Gold length covered by prediction |
-| `f1_score` | `float` | Harmonic mean of precision and recall |
-| `TP` | `int` | Matched edge count |
-| `FP` | `int` | Unmatched predicted edge count |
-| `FN` | `int` | Unmatched gold edge count |
-| `num_gt` | `int` | Total gold edges |
-| `num_pred` | `int` | Total predicted edges |
+| `f1` | `float` | Harmonic mean of precision and recall |
+| `TP` | `float` | Matched gold length |
+| `FP` | `float` | Predicted length not matched by gold |
+| `FN` | `float` | Gold length not matched by prediction |
 
 ---
 
@@ -95,8 +99,9 @@ Branch and leaf node detection metric.
 KeypointMetric(
     keypoint_types=["branch", "leaf"],
     threshold_dis=5.0,
-    scale=(1, 1, 1),
+    scale=(0.35, 0.35, 1),
     use_category=False,
+    mode="block",
 )
 ```
 
@@ -104,8 +109,9 @@ KeypointMetric(
 |-----------|------|---------|-------------|
 | `keypoint_types` | `list[str]` | `["branch", "leaf"]` | Which keypoints to evaluate |
 | `threshold_dis` | `float` | `5.0` | Matching distance threshold (µm) |
-| `scale` | `tuple` | `(1,1,1)` | Coordinate scaling |
+| `scale` | `tuple` | `(0.35,0.35,1)` | Coordinate scaling |
 | `use_category` | `bool` | `False` | Report per-type stats separately |
+| `mode` | `str` | `"block"` | `"block"` counts isolated roots as leaves; `"whole"` does not |
 
 ### `run(gold, pred) → dict`
 
@@ -122,7 +128,8 @@ KeypointMetric(
 
 **Per-category mode (`use_category=True`):**
 
-Result contains nested dicts `result["branch"]` and `result["leaf"]`, each with the same keys above.
+Result contains flat per-category fields such as `branch_precision`,
+`branch_recall`, `branch_f1`, `leaf_precision`, `leaf_recall`, and `leaf_f1`.
 
 ---
 
@@ -137,14 +144,15 @@ FiberMetric(
     iou_threshold=0.8,
     dist_threshold=5.0,
     dist_sample=1.0,
-    align_roots=True,
-    align_roots_threshold=20.0,
+    align_roots=False,
+    align_roots_thredhold=20.0,
     scale=(1, 1, 1),
     resample_step=2.0,
     only_from_soma=False,
     with_direction=False,
     use_category=False,
-    min_fiber_length=0.0,
+    min_fiber_length=5.0,
+    eps=1e-6,
 )
 ```
 
@@ -153,14 +161,15 @@ FiberMetric(
 | `iou_threshold` | `float` | `0.8` | Minimum IoU for a match to count as TP |
 | `dist_threshold` | `float` | `5.0` | Spatial tolerance for IoU calculation (µm) |
 | `dist_sample` | `float` | `1.0` | Resampling step for IoU calculation |
-| `align_roots` | `bool` | `True` | Align tree roots before comparison |
-| `align_roots_threshold` | `float` | `20.0` | Max distance to match roots |
+| `align_roots` | `bool` | `False` | Align predicted roots to gold roots before comparison |
+| `align_roots_thredhold` | `float` | `20.0` | Max distance to match roots. The parameter name intentionally follows the current source spelling |
 | `scale` | `tuple` | `(1,1,1)` | Coordinate scaling |
-| `resample_step` | `float` | `2.0` | Tree resampling step |
+| `resample_step` | `float` | `2.0` | Tree resampling step; use `None` to skip |
 | `only_from_soma` | `bool` | `False` | Only evaluate fibers from type=1 nodes |
 | `with_direction` | `bool` | `False` | Consider fiber direction in matching |
 | `use_category` | `bool` | `False` | Report axon / dendrite stats separately |
-| `min_fiber_length` | `float` | `0.0` | Ignore fibers shorter than this (µm) |
+| `min_fiber_length` | `float` | `5.0` | Ignore fibers shorter than this (µm) |
+| `eps` | `float` | `1e-6` | Numerical guard for length-ratio checks |
 
 ### `run(gold, pred, skip_center_dist=100, return_fibers=False, verbose=False) → dict`
 
@@ -178,7 +187,7 @@ FiberMetric(
 |-----|------|-------------|
 | `precision` | `float` | Fiber precision |
 | `recall` | `float` | Fiber recall |
-| `f1_score` | `float` | Harmonic mean |
+| `f1` | `float` | Harmonic mean |
 | `TP` / `FP` / `FN` | `int` | Matched / extra / missed fibers |
 | `num_gt` | `int` | Total gold fibers |
 | `num_pred` | `int` | Total predicted fibers |
@@ -186,11 +195,49 @@ FiberMetric(
 | `iou_all` | `float` | Mean IoU across all gold fibers |
 | `ious` | `list[float]` | Per-gold-fiber IoU values |
 | `matches` | `list` | Matched `(gold_fiber, pred_fiber)` pairs |
-| `FN_fiber_ids` | `list[list[int]]` | Node IDs of unmatched gold fibers |
+| `FN_fiber_ids` | `list[list[int]]` or `None` | Node IDs of unmatched gold fibers when fiber details are requested |
 | `gold_fibers` | `list[SwcFiber]` or `None` | Returned when `return_fibers=True` |
 | `pred_fibers` | `list[SwcFiber]` or `None` | Returned when `return_fibers=True` |
 
-With `use_category=True`, nested dicts `result["axon"]` and `result["dendrite"]` contain per-type stats.
+With `use_category=True`, the result includes flat axon and dendrite fields such
+as `axon_precision`, `axon_recall`, `axon_f1`, `dendrite_precision`,
+`dendrite_recall`, and `dendrite_f1`.
+
+---
+
+## `swclib.metrics.point_metric.PointMetric`
+
+Point-level bidirectional nearest-neighbor metric over all resampled nodes.
+
+### Constructor
+
+```python
+PointMetric(
+    dist_threshold=4,
+    scale=(1, 1, 1),
+    resample_step=2.0,
+)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `dist_threshold` | `float` | `4` | Nearest-neighbor match threshold |
+| `scale` | `tuple` | `(1,1,1)` | Coordinate scaling |
+| `resample_step` | `float` or `None` | `2.0` | Resampling step before comparison |
+
+### `run(gold, pred, return_points=False) → dict`
+
+**Returns:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `precision` / `recall` / `f1` | `float` | Point-level scores |
+| `MES` | `float` | Morphology error score-style overlap ratio |
+| `TP` / `FP` / `FN` | `int` | Matched / extra / missed points |
+| `S_G`, `S_hit_pred`, `S_miss`, `S_extra` | `int` | Raw count terms used by MES |
+
+When `return_points=True`, the result also includes nearest-neighbor distances,
+indices, matched pairs, missed/extra point IDs, and the coordinate arrays.
 
 ---
 
@@ -210,8 +257,8 @@ MetricManager(
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `metric_names` | `list[str]` | All four | Metrics to compute |
-| `collect_method` | `str` | `"micro"` | `"micro"` (aggregate TP/FP/FN) or `"macro"` (average P/R/F1) |
+| `metric_names` | `list[str]` | All four | Metrics to compute. Supported names: `"ssd"`, `"point"`, `"length"`, `"keypoints"`, `"fiber"` |
+| `collect_method` | `str` | `"micro"` | Current implementation supports `"micro"` |
 | `scale` | `tuple` | `(1,1,1)` | Coordinate scaling applied to all metrics |
 
 ### Methods
@@ -231,3 +278,8 @@ Compute metrics for one gold/pred pair and store results.
 
 #### `collect(save_path=None) → dict`
 Aggregate stored results into a summary dict. Optionally save to JSON.
+
+!!! warning
+    `MetricManager.collect()` assumes non-SSD metrics expose top-level `TP`,
+    `FP`, and `FN`. Metrics configured with per-category output may need
+    custom aggregation if you want category-specific summaries.

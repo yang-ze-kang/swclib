@@ -1,6 +1,6 @@
 # Reconstruction Metrics
 
-swclib provides four complementary metrics for comparing a predicted neuron reconstruction against a gold standard. All metrics share the same interface:
+swclib provides five complementary metrics for comparing a predicted neuron reconstruction against a gold standard. All metrics share the same interface:
 
 ```python
 result = metric.run(gold_swc_path, pred_swc_path)
@@ -15,6 +15,7 @@ result = metric.run(gold_swc_path, pred_swc_path)
 | Metric | Class | What it measures |
 |--------|-------|-----------------|
 | SSD | `SSDMetric` | Mean spatial distance between node sets |
+| Point | `PointMetric` | Node-level nearest-neighbor precision/recall |
 | Length | `LengthMetric` | Edge-level path coverage (precision/recall) |
 | Keypoint | `KeypointMetric` | Detection of branch and leaf points |
 | Fiber | `FiberMetric` | Path-level (root-to-leaf) matching |
@@ -61,10 +62,10 @@ The **Length metric** compares reconstructions at the *edge* level. Each edge (s
 from swclib.metrics.length_metric import LengthMetric
 
 metric = LengthMetric(
-    radius_threshold=5.0,   # matching radius (µm)
-    length_threshold=2.0,   # minimum edge length to evaluate (µm)
+    radius_threshold=2.0,   # matching radius (µm)
+    length_threshold=0.2,   # minimum matched length (µm)
     scale=(1, 1, 1),
-    resample_step=1.0,      # resampling step for edge comparison
+    resample_step=2.0,      # resampling step for edge comparison
 )
 result = metric.run("gold.swc", "pred.swc")
 ```
@@ -75,12 +76,40 @@ result = metric.run("gold.swc", "pred.swc")
 |-----|-------------|
 | `precision` | Fraction of predicted length that matches gold |
 | `recall` | Fraction of gold length that is covered by prediction |
-| `f1_score` | Harmonic mean of precision and recall |
+| `f1` | Harmonic mean of precision and recall |
 | `TP` | Matched edge length |
 | `FP` | Unmatched predicted edge length |
 | `FN` | Unmatched gold edge length |
-| `num_gt` | Total gold edge count |
-| `num_pred` | Total predicted edge count |
+
+---
+
+## Point Metric
+
+The **Point metric** compares all resampled nodes by nearest-neighbor distance.
+It is useful when you want a simple node-level precision/recall score.
+
+### Usage
+
+```python
+from swclib.metrics.point_metric import PointMetric
+
+metric = PointMetric(
+    dist_threshold=4.0,
+    scale=(1, 1, 1),
+    resample_step=2.0,
+)
+result = metric.run("gold.swc", "pred.swc")
+```
+
+### Output
+
+| Key | Description |
+|-----|-------------|
+| `precision` | Fraction of predicted points near gold points |
+| `recall` | Fraction of gold points covered by prediction |
+| `f1` | Harmonic mean of precision and recall |
+| `MES` | Morphology error score-style overlap ratio |
+| `TP` / `FP` / `FN` | Matched / extra / missed points |
 
 ---
 
@@ -96,8 +125,9 @@ from swclib.metrics.keypoint_metric import KeypointMetric
 metric = KeypointMetric(
     keypoint_types=["branch", "leaf"],
     threshold_dis=5.0,      # matching distance threshold (µm)
-    scale=(1, 1, 1),
+    scale=(0.35, 0.35, 1),
     use_category=True,      # report branch and leaf stats separately
+    mode="block",           # or "whole"
 )
 result = metric.run("gold.swc", "pred.swc")
 ```
@@ -113,16 +143,16 @@ result = metric.run("gold.swc", "pred.swc")
 
 ### Output (per-category mode, `use_category=True`)
 
-The dict contains nested sub-dicts for each keypoint type:
+The dict contains flat per-category fields:
 
 ```python
-result["branch"]["precision"]
-result["branch"]["recall"]
-result["branch"]["f1"]
+result["branch_precision"]
+result["branch_recall"]
+result["branch_f1"]
 
-result["leaf"]["precision"]
-result["leaf"]["recall"]
-result["leaf"]["f1"]
+result["leaf_precision"]
+result["leaf_recall"]
+result["leaf_f1"]
 ```
 
 ---
@@ -146,7 +176,7 @@ metric = FiberMetric(
     only_from_soma=True,        # only evaluate fibers starting at type=1 nodes
     min_fiber_length=20.0,      # ignore fibers shorter than this (µm)
     align_roots=True,           # align tree roots before comparison
-    align_roots_threshold=20.0, # max distance to match roots
+    align_roots_thredhold=20.0, # current source spelling; max distance to match roots
     with_direction=False,       # consider fiber direction
     use_category=True,          # separate axon (type=2) and dendrite (type=3/4) stats
 )
@@ -159,7 +189,7 @@ result = metric.run("gold.swc", "pred.swc")
 |-----|-------------|
 | `precision` | Fraction of predicted fibers that match a gold fiber |
 | `recall` | Fraction of gold fibers that are matched by a prediction |
-| `f1_score` | Harmonic mean |
+| `f1` | Harmonic mean |
 | `TP` / `FP` / `FN` | Fiber-level counts |
 | `num_gt` | Number of gold fibers |
 | `num_pred` | Number of predicted fibers |
@@ -169,7 +199,9 @@ result = metric.run("gold.swc", "pred.swc")
 | `matches` | List of matched (gold_fiber, pred_fiber) pairs |
 | `FN_fiber_ids` | Node IDs of unmatched gold fibers |
 
-With `use_category=True`, per-category stats appear under `result["axon"]` and `result["dendrite"]`.
+With `use_category=True`, per-category stats appear as flat fields such as
+`axon_precision`, `axon_recall`, `axon_f1`, `dendrite_precision`,
+`dendrite_recall`, and `dendrite_f1`.
 
 With `return_fibers=True`, the actual `SwcFiber` objects are returned under `result["gold_fibers"]` and `result["pred_fibers"]`.
 
@@ -219,7 +251,7 @@ print(summary)
 | Method | Description |
 |--------|-------------|
 | `"micro"` | Sum all TP/FP/FN across the dataset, then compute final P/R/F1 |
-| `"macro"` | Compute P/R/F1 per pair, then average |
+| `"macro"` | Not implemented in the current source |
 
 Micro averaging is typically preferred for imbalanced datasets (neurons with very different fiber counts).
 
@@ -233,4 +265,4 @@ Micro averaging is typically preferred for imbalanced datasets (neurons with ver
 | Evaluate path tracing completeness | Length |
 | Evaluate topology accuracy | Keypoint |
 | Comprehensive morphology evaluation | Fiber |
-| Full benchmark pipeline | MetricManager with all four |
+| Full benchmark pipeline | MetricManager with SSD, length, keypoint, and fiber metrics |

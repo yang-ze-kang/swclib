@@ -15,6 +15,9 @@ SWC is a standard file format in computational neuroscience for representing 3D 
 
 📖 **Documentation:** https://yang-ze-kang.github.io/swclib/
 
+**Coordinate conventions:** SWC coordinates are `(x, y, z)`. Image volumes are
+NumPy arrays with shape `(Z, Y, X)`, and image-region readers use `(z, y, x)`.
+
 ## Features
 
 - **Data structures** — tree representation of SWC files with efficient spatial queries
@@ -55,6 +58,16 @@ swc.resample(min_distance=2.0)
 
 # Save
 swc.save_to_swc("neuron_resampled.swc")
+```
+
+Crop a local SWC region:
+
+```python
+local = swc.read_region(
+    start=(100, 100, 50),   # (x, y, z), inclusive
+    end=(200, 220, 90),     # (x, y, z), exclusive
+    out_path="neuron_crop.swc",
+)
 ```
 
 ## Module Overview
@@ -180,8 +193,19 @@ from swclib.metrics.length_metric import LengthMetric
 
 metric = LengthMetric(radius_threshold=5.0, scale=(1, 1, 1))
 result = metric.run("gold.swc", "pred.swc")
-# result keys: precision, recall, f1_score, TP, FP, FN, num_gt, num_pred
-print(result["f1_score"])
+# TP/FP/FN are matched, extra, and missed lengths
+print(result["f1"])
+```
+
+**Point metric** — node-level nearest-neighbor precision/recall:
+
+```python
+from swclib.metrics.point_metric import PointMetric
+
+metric = PointMetric(dist_threshold=4.0, scale=(1, 1, 1), resample_step=2.0)
+result = metric.run("gold.swc", "pred.swc")
+# result keys: precision, recall, f1, MES, TP, FP, FN
+print(result["f1"])
 ```
 
 **Keypoint metric** — branch/leaf point detection:
@@ -196,8 +220,8 @@ metric = KeypointMetric(
     use_category=True,     # separate branch vs leaf stats
 )
 result = metric.run("gold.swc", "pred.swc")
-print(result["branch"]["f1"])
-print(result["leaf"]["f1"])
+print(result["branch_f1"])
+print(result["leaf_f1"])
 ```
 
 **Fiber metric** — path-level (root-to-leaf) matching, most comprehensive:
@@ -214,9 +238,9 @@ metric = FiberMetric(
     min_fiber_length=20.0,
 )
 result = metric.run("gold.swc", "pred.swc")
-# result keys: precision, recall, f1_score, TP, FP, FN,
+# result keys: precision, recall, f1, TP, FP, FN,
 #              iou_matched, iou_all, ious, matches, FN_fiber_ids
-print(result["f1_score"])
+print(result["f1"])
 ```
 
 **Batch evaluation with MetricManager:**
@@ -225,7 +249,7 @@ print(result["f1_score"])
 from swclib.metrics.manager import MetricManager
 
 manager = MetricManager(
-    metric_names=["ssd", "length", "keypoints", "fiber"],
+    metric_names=["ssd", "length", "keypoints", "fiber"],  # "point" is also available
     collect_method="micro",   # aggregate TP/FP/FN across all pairs
     scale=(1, 1, 1),
 )
