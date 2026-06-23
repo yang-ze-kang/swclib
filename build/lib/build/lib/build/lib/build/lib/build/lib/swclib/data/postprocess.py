@@ -4,16 +4,14 @@ short-branch pruning.
 These passes operate on a neuron forest and are exposed two ways:
 
 * **Array level** (``_post_merge_forest_by_overlap``,
-  ``_post_prune_short_terminal_branches``,
-  ``_post_prune_terminal_branches_by_node_count``) — operate on the
+  ``_post_prune_short_terminal_branches``) — operate on the
   ``(points, parents, node_types)`` triple, where ``points`` is an ``(N, 3)``
   ``xyz`` float array, ``parents`` is an ``(N,)`` int array of **0-based parent
   indices** (root = ``-1``), and ``node_types`` is an ``(N,)`` int array. These
   keep the exact signatures/stats expected by existing array-based pipelines.
 
 * **``Swc`` level** (``merge_overlapping_branches``,
-  ``prune_short_terminal_branches``,
-  ``prune_terminal_branches_by_node_count``) — operate on a :class:`swclib.data.swc.Swc`
+  ``prune_short_terminal_branches``) — operate on a :class:`swclib.data.swc.Swc`
   and return ``(Swc, stats)``. Internally they convert to arrays via
   ``swc_to_arrays`` / ``swc_from_arrays``.
 
@@ -886,116 +884,6 @@ def _post_prune_short_terminal_branches(
     return current_points, current_parents, current_node_types, stats
 
 
-def _post_prune_terminal_branches_by_node_count(
-    points: np.ndarray,
-    parents: np.ndarray,
-    node_types: np.ndarray,
-    min_node_count: int,
-    max_iterations: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
-    current_points = np.asarray(points, dtype=np.float32)
-    current_parents = np.asarray(parents, dtype=np.int64)
-    current_node_types = np.asarray(node_types, dtype=np.int64)
-    min_node_count = int(min_node_count)
-    max_iterations = max(1, int(max_iterations))
-    stats: Dict[str, Any] = {
-        "enabled": True,
-        "input_nodes": int(current_points.shape[0]),
-        "input_components": int(len(_forest_connected_components(current_parents))),
-        "min_node_count": int(min_node_count),
-        "max_iterations": int(max_iterations),
-        "removed_nodes": 0,
-        "removed_branches": 0,
-        "iteration_logs": [],
-    }
-    if current_points.shape[0] < 2 or min_node_count <= 1:
-        stats["output_nodes"] = int(current_points.shape[0])
-        stats["output_components"] = int(len(_forest_connected_components(current_parents)))
-        return current_points, current_parents, current_node_types, stats
-
-    for iteration in range(max_iterations):
-        if current_points.shape[0] < 2:
-            break
-        neighbors = _neighbors_from_parents(current_parents)
-        degrees = np.asarray([len(item) for item in neighbors], dtype=np.int64)
-        roots = {int(idx) for idx in np.flatnonzero(current_parents < 0).tolist()}
-        components = _forest_connected_components(current_parents)
-        component_sizes: Dict[int, int] = {}
-        for component in components:
-            for node_idx in component:
-                component_sizes[int(node_idx)] = int(len(component))
-
-        remove_nodes: set = set()
-        branch_logs: List[Dict[str, Any]] = []
-        endpoints = [int(idx) for idx in np.flatnonzero(degrees <= 1).tolist()]
-        for leaf in endpoints:
-            if leaf in remove_nodes or int(degrees[leaf]) != 1:
-                continue
-
-            path_nodes = [int(leaf)]
-            prev_idx = int(leaf)
-            current_idx = int(neighbors[leaf][0])
-
-            while int(degrees[current_idx]) == 2 and current_idx not in roots:
-                path_nodes.append(int(current_idx))
-                next_candidates = [
-                    int(idx) for idx in neighbors[current_idx] if int(idx) != prev_idx
-                ]
-                if not next_candidates:
-                    break
-                next_idx = int(next_candidates[0])
-                prev_idx = int(current_idx)
-                current_idx = int(next_idx)
-
-            anchor_idx = int(current_idx)
-            if anchor_idx in path_nodes:
-                continue
-            if anchor_idx not in roots and int(degrees[anchor_idx]) <= 1:
-                continue
-            if len(path_nodes) + 1 >= int(component_sizes.get(leaf, current_points.shape[0])):
-                continue
-            if len(path_nodes) >= min_node_count:
-                continue
-            if any(int(node_idx) in remove_nodes for node_idx in path_nodes):
-                continue
-
-            remove_nodes.update(int(node_idx) for node_idx in path_nodes)
-            branch_logs.append(
-                {
-                    "leaf_index": int(leaf),
-                    "anchor_index": int(anchor_idx),
-                    "node_count": int(len(path_nodes)),
-                    "removed_node_indices": [int(idx) for idx in path_nodes],
-                }
-            )
-
-        if not remove_nodes:
-            break
-
-        keep_mask = np.ones((int(current_points.shape[0]),), dtype=bool)
-        keep_mask[np.asarray(sorted(remove_nodes), dtype=np.int64)] = False
-        current_points, current_parents, current_node_types = _compact_forest_by_keep_mask(
-            current_points,
-            current_parents,
-            current_node_types,
-            keep_mask,
-        )
-        stats["removed_nodes"] = int(stats["removed_nodes"]) + int(len(remove_nodes))
-        stats["removed_branches"] = int(stats["removed_branches"]) + int(len(branch_logs))
-        stats["iteration_logs"].append(
-            {
-                "iteration": int(iteration + 1),
-                "removed_nodes": int(len(remove_nodes)),
-                "removed_branches": int(len(branch_logs)),
-                "branches": branch_logs,
-            }
-        )
-
-    stats["output_nodes"] = int(current_points.shape[0])
-    stats["output_components"] = int(len(_forest_connected_components(current_parents)))
-    return current_points, current_parents, current_node_types, stats
-
-
 # ---------------------------------------------------------------------------
 # Swc <-> array adapters
 # ---------------------------------------------------------------------------
@@ -1111,28 +999,6 @@ def prune_short_terminal_branches(
         parents,
         node_types,
         min_length=min_length,
-        max_iterations=max_iterations,
-    )
-    return swc_from_arrays(points, parents, node_types), stats
-
-
-def prune_terminal_branches_by_node_count(
-    swc: Any,
-    min_node_count: int,
-    max_iterations: int,
-) -> Tuple[Any, Dict[str, Any]]:
-    """Iteratively prune terminal branches with too few nodes from a :class:`Swc`.
-
-    The counted nodes are the removable branch nodes from leaf back to, but not
-    including, the branch/root anchor. Branches with node count lower than
-    ``min_node_count`` are removed. Returns ``(Swc, stats)``.
-    """
-    points, parents, node_types = swc_to_arrays(swc)
-    points, parents, node_types, stats = _post_prune_terminal_branches_by_node_count(
-        points,
-        parents,
-        node_types,
-        min_node_count=min_node_count,
         max_iterations=max_iterations,
     )
     return swc_from_arrays(points, parents, node_types), stats

@@ -1,0 +1,237 @@
+from dataclasses import dataclass
+import numpy as np
+from scipy.spatial import cKDTree
+
+
+def resample_nodes_by_distance(nodes, distance=2, eps=1e-8):
+    nodes = np.asarray(nodes)
+    diffs = np.diff(nodes, axis=0)
+    seg_lens = np.linalg.norm(diffs, axis=1)
+    cum_len = np.concatenate([[0], np.cumsum(seg_lens)])
+    total_len = cum_len[-1]
+
+    target_lens = np.arange(0, total_len, distance)
+
+    new_nodes = []
+    for t in target_lens:
+        idx = np.searchsorted(cum_len, t)
+        if idx == 0:
+            new_nodes.append(nodes[0])
+        else:
+            ratio = (t - cum_len[idx - 1]) / seg_lens[idx - 1]
+            p = nodes[idx - 1] + ratio * diffs[idx - 1]
+            new_nodes.append(p)
+
+    # Avoid duplicated endpoint caused by floating-point precision
+    if len(new_nodes) == 0 or np.linalg.norm(new_nodes[-1] - nodes[-1]) > eps:
+        new_nodes.append(nodes[-1])
+
+    return np.array(new_nodes)
+
+
+class SwcFiber:
+
+    def __init__(self):
+        self.nodes = []
+        self._length = None
+
+        self.resampled_coords = None
+        self.last_sampled_dist = -1
+        self.cktree = None
+        self._resample_cache = None
+
+    def _invalidate_cache(self):
+        self._length = None
+        self.resampled_coords = None
+        self.last_sampled_dist = -1
+        self.cktree = None
+        self._resample_cache = None
+
+    def __len__(self):
+        return len(self.nodes)
+
+    def __eq__(self, fiber):
+        if self.nodes == fiber.nodes:
+            return True
+        elif self.nodes[::-1] == fiber.nodes:
+            return True
+        return False
+
+    def __getitem__(self, idx):
+        return self.nodes[idx]
+
+    @property
+    def coords(self):
+        return np.array([node.coord for node in self.nodes])
+
+    @property
+    def length(self, update=True):
+        if len(self.nodes) < 2:
+            return 0.0
+        if self._length is not None and not update:
+            return self._length
+        points = self.coords
+        diffs = points[1:] - points[:-1]
+        seg_lengths = np.linalg.norm(diffs, axis=1)
+        self._length = float(seg_lengths.sum())
+        return self._length
+
+    @property
+    def center(self):
+        return self.coords.mean(0)
+
+    def append(self, node):
+        self.nodes.append(node)
+        self._invalidate_cache()
+
+    def pop(self):
+        node = self.nodes.pop()
+        self._invalidate_cache()
+        return node
+
+    def reverse(self):
+        self.nodes = self.nodes[::-1]
+        self._invalidate_cache()
+        return self
+
+    def copy(self):
+        new_fiber = SwcFiber()
+        new_fiber.nodes = self.nodes[:]
+        return new_fiber
+
+    def get_nearest_node(self, point, return_dist=False):
+        coords = self.coords
+        tree = cKDTree(coords)
+        dist, idx = tree.query(point)
+        if return_dist:
+            return self.nodes[idx], dist
+        else:
+            return self.nodes[idx]
+
+    def cache_resample_by_distance(self, dist_sample):
+        if (
+            self._resample_cache is not None
+            and self._resample_cache["dist_sample"] == dist_sample
+        ):
+            return self._resample_cache["coords"], self._resample_cache["tree"]
+
+        coords = resample_nodes_by_distance(self.coords, dist_sample)
+        tree = cKDTree(coords)
+        self._resample_cache = {
+            "dist_sample": dist_sample,
+            "coords": coords,
+            "tree": tree,
+        }
+
+        self.resampled_coords = coords
+        self.last_sampled_dist = dist_sample
+        self.cktree = tree
+        return coords, tree
+
+    def cache_resample_coords_by_distance(self, dist_sample):
+        return self.cache_resample_by_distance(dist_sample)[0]
+
+    def cache_cKDTree(self, dist_sample):
+        return self.cache_resample_by_distance(dist_sample)[1]
+
+    def cahce_resample_coords_by_distance(self, dist_sample):
+        return self.cache_resample_coords_by_distance(dist_sample)
+
+    def cahce_cKDTree(self, coords):
+        if self.resampled_coords is coords and self.cktree is not None:
+            return self.cktree
+        return cKDTree(coords)
+
+    def get_overlap_length_with(
+        self, fiber: "SwcFiber", dist_sample=1.0, dist_threshold=3.0
+    ):
+        coords1 = self.coords
+        coords2 = fiber.coords
+        if coords1.ndim == 1:
+            coords1 = coords1[None, :]
+        if coords2.ndim == 1:
+            coords2 = coords2[None, :]
+        if len(coords1) < 2 or len(coords2) < 2:
+            return 0.0
+        coords1, tree1 = self.cache_resample_by_distance(dist_sample)
+        coords2, tree2 = fiber.cache_resample_by_distance(dist_sample)
+        # fiber1->fiber2
+        midpoints = (coords1[:-1] + coords1[1:]) * 0.5
+        dists, _ = tree2.query(midpoints)
+        mask = dists <= dist_threshold
+        seglens1 = np.linalg.norm(coords1[1:] - coords1[:-1], axis=1)
+        overlap1 = np.sum(seglens1[mask])
+        # fiber2->fiber1
+        midpoints = (coords2[:-1] + coords2[1:]) * 0.5
+        dists, _ = tree1.query(midpoints)
+        mask = dists <= dist_threshold
+        seglens2 = np.linalg.norm(coords2[1:] - coords2[:-1], axis=1)
+        overlap2 = np.sum(seglens2[mask])
+        loverlap = (overlap1 + overlap2) / 2.0
+        return loverlap
+
+    def cal_iou(
+        self,
+        fiber: "SwcFiber",
+        dist_sample=1.0,
+        dist_threshold=3.0,
+        min_iou_thres=0.5,
+        eps=1e-7,
+    ):
+        if len(self.nodes) == 1:
+            if (
+                fiber.get_nearest_node(self.coords[0], return_dist=True)[1]
+                <= dist_threshold
+            ):
+                return len(self.nodes) / len(fiber.nodes)
+            else:
+                return 0.0
+        if len(fiber.nodes) == 1:
+            if (
+                self.get_nearest_node(fiber.coords[0], return_dist=True)[1]
+                <= dist_threshold
+            ):
+                return len(fiber.nodes) / len(self.nodes)
+            else:
+                return 0.0
+        l1 = self.length
+        l2 = fiber.length
+        if l1 / l2 < min_iou_thres or l2 / l1 < min_iou_thres:
+            return 0.0
+        overlap_length = self.get_overlap_length_with(
+            fiber, dist_sample, dist_threshold
+        )
+        union_length = l1 + l2 - overlap_length
+        return overlap_length / (union_length + eps)
+
+    def is_sub_fiber_of(
+        self,
+        fiber: "SwcFiber",
+        dist_sample=1.0,
+        dist_threshold=3.0,
+        same_fiber_iou_thres=0.9,
+        return_prob=False,
+    ):
+        l1 = self.length
+        l2 = fiber.length
+        if l1 > l2 * 1.5:
+            if return_prob:
+                return 0.0
+            else:
+                return False
+        overlap_length = self.get_overlap_length_with(
+            fiber, dist_sample, dist_threshold
+        )
+        prob = overlap_length / (l1 + 1e-7)
+        if return_prob:
+            return prob
+        else:
+            return prob > same_fiber_iou_thres
+
+    def to_str_list(self, scale=(1.0, 1.0, 1.0)):
+        swc_str = []
+        for node in self.nodes:
+            if node.is_virtual():
+                continue
+            swc_str.append(node.to_swc_str(scale=scale))
+        return "".join(swc_str)
