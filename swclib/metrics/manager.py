@@ -6,6 +6,7 @@ from swclib.metrics.length_metric import LengthMetric
 from swclib.metrics.keypoint_metric import KeypointMetric
 from swclib.metrics.fiber_metric import FiberMetric
 from swclib.metrics.point_metric import PointMetric
+from swclib.metrics.diadem import DIADEMMetric
 from swclib.utils.json import *
 
 default_metric_params = {
@@ -85,6 +86,7 @@ METRIC_MAP = {
     "length": LengthMetric,
     "keypoints": KeypointMetric,
     "fiber": FiberMetric,
+    "diadem": DIADEMMetric,
 }
 
 
