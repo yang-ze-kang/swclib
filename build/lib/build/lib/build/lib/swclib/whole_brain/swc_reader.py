@@ -1,5 +1,7 @@
 import numpy as np
 
+from swclib.data.swc import Swc
+
 
 class SwcReader:
 
@@ -72,13 +74,22 @@ class SwcReader:
         self,
         start: tuple[float, float, float],
         end: tuple[float, float, float],
-        out_path: str,
+        out_path: str = None,
         out_r = None,
-    ):
+    ) -> Swc:
+        """
+        Read nodes in a cube and return them as a local-coordinate Swc object.
+
+        Nodes are reindexed to 1..M. If a kept node's parent is outside the
+        region, that node becomes a root in the returned SWC.
+        """
+        swc = Swc()
         keep = self.query_cube_mask([*start, *end])
         keep_idx = np.flatnonzero(keep)
         if keep_idx.size == 0:
-            return False
+            if out_path is not None:
+                swc.save_to_swc(out_path, write_header=False)
+            return swc
 
         # Reindex kept nodes to 1..M
         # Map old node id -> new node id
@@ -92,6 +103,8 @@ class SwcReader:
         out_ys = self.ys[keep_idx] - start[1]
         out_zs = self.zs[keep_idx] - start[2]
         out_rs = self.rs[keep_idx]
+        if out_r is not None:
+            out_rs = np.full_like(out_rs, out_r, dtype=np.float32)
         out_parents_old = self.parents[keep_idx]
 
         out_parents_new = np.empty_like(out_parents_old)
@@ -103,13 +116,30 @@ class SwcReader:
                 # clip: if parent not kept => -1
                 out_parents_new[i] = oldid2newid.get(pid, -1)
 
-        # Write SWC
-        # Note: keep formatting simple and fast
+        for nid, t, x, y, z, r, pid_new in zip(
+            new_ids,
+            out_types,
+            out_xs,
+            out_ys,
+            out_zs,
+            out_rs,
+            out_parents_new,
+        ):
+            nid = int(nid)
+            pid_new = int(pid_new)
+            swc.nodes[nid] = {
+                "id": nid,
+                "type": int(t),
+                "x": float(x),
+                "y": float(y),
+                "z": float(z),
+                "radius": float(r),
+                "parent": pid_new,
+            }
+            swc.edges.append((nid, pid_new))
+
+        swc._refresh_bound_box()
+
         if out_path is not None:
-            with open(out_path, "w", buffering=1024 * 1024) as f:
-                f.write(f"# cube: {start}->{end}\n")
-                for nid, t, x, y, z, r, pid_new in zip(new_ids, out_types, out_xs, out_ys, out_zs, out_rs, out_parents_new):
-                    if out_r is not None:
-                        r = out_r
-                    f.write(f"{nid} {int(t)} {float(x):.6f} {float(y):.6f} {float(z):.6f} {float(r):.6f} {int(pid_new)}\n")
-        return True
+            swc.save_to_swc(out_path, write_header=False)
+        return swc

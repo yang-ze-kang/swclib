@@ -1413,6 +1413,7 @@
 <h3 id="resampling">Resampling</h3>
 <p><code>resample</code> inserts or removes nodes so that consecutive nodes are approximately <code>min_distance</code> apart.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">swc</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">min_distance</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">swc</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">min_distance</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">round_mode</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># round segment ends to the nearest step</span>
 </code></pre></div>
 <h3 id="removing-duplicate-nodes">Removing duplicate nodes</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Duplicates based on XYZ coordinates only</span>

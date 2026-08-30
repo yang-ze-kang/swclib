@@ -39,7 +39,7 @@ Returns `(depth, height, width)`.
 #### `get_bbox() → tuple`
 Returns `((x1, y1, z1), (x2, y2, z2))` bounding box.
 
-#### `read_region(start, end, mode='tiff', num_workers=32, parallel_backend='thread', padding=None) → ndarray`
+#### `read_region(start, end, mode='raster', num_workers=32, parallel_backend='thread', padding=None) → ndarray`
 
 Read a 3D sub-region from the slice stack.
 
@@ -47,7 +47,7 @@ Read a 3D sub-region from the slice stack.
 |-----------|------|---------|-------------|
 | `start` | `tuple[int, int, int]` | — | Inclusive start corner `(z, y, x)` |
 | `end` | `tuple[int, int, int]` | — | Exclusive end corner `(z, y, x)` |
-| `mode` | `str` | `'tiff'` | Backend: `'tiff'` (tifffile) or `'raster'` (rasterio) |
+| `mode` | `str` | `'raster'` | Backend: `'raster'` (rasterio) or `'tiff'` (tifffile) |
 | `num_workers` | `int` | `32` | Number of parallel workers |
 | `parallel_backend` | `str` | `'thread'` | `'thread'` or `'process'` |
 | `padding` | `tuple` or `None` | `None` | Optional padding `(px, py, pz)` added to each side |
@@ -60,12 +60,31 @@ Returns: `ndarray` of shape `(z2-z1, y2-y1, x2-x1)`.
 
 Minimal SWC reader for large whole-brain coordinate files.
 
-### Static method
+### Constructor
 
-#### `SwcReader.read(path) → ndarray`
+```python
+SwcReader(path, rescale=(1.0, 1.0, 1.0))
+```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `path` | `str` | SWC file path |
+| `rescale` | `tuple[float, float, float]` | Coordinate scale applied while loading `(sx, sy, sz)` |
 
-Returns: `ndarray` of shape `(N, 7)` with columns `[id, type, x, y, z, radius, parent]`.
+### Methods
+
+#### `read_region(start, end, out_path=None, out_r=None) → Swc`
+
+Read nodes inside a whole-brain coordinate cube and return a local-coordinate
+`Swc` object. Nodes are reindexed to `1..N`; nodes whose parent falls outside
+the region become roots.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `start` | `tuple[float, float, float]` | — | Inclusive start corner `(x, y, z)` |
+| `end` | `tuple[float, float, float]` | — | Exclusive end corner `(x, y, z)` |
+| `out_path` | `str` or `None` | `None` | Optional path to save the returned SWC |
+| `out_r` | `float` or `None` | `None` | Optional radius override for returned and saved nodes |
+
+Returns: `Swc` object containing the cropped region. Empty regions return an
+empty `Swc`.

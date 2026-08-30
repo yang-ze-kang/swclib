@@ -951,6 +951,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#swclibmetricspoint_metricpointmetric" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swclib.metrics.point_metric.PointMetric
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="swclib.metrics.point_metric.PointMetric">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rungold-pred-return_pointsfalse-dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run(gold, pred, return_points=False) → dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#swclibmetricsmanagermetricmanager" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -963,7 +1002,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#constructor_4" class="md-nav__link">
+  <a href="#constructor_5" class="md-nav__link">
     <span class="md-ellipsis">
       
         Constructor
@@ -1255,6 +1294,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#swclibmetricspoint_metricpointmetric" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swclib.metrics.point_metric.PointMetric
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="swclib.metrics.point_metric.PointMetric">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rungold-pred-return_pointsfalse-dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run(gold, pred, return_points=False) → dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#swclibmetricsmanagermetricmanager" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1267,7 +1345,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#constructor_4" class="md-nav__link">
+  <a href="#constructor_5" class="md-nav__link">
     <span class="md-ellipsis">
       
         Constructor
@@ -1357,6 +1435,9 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">result</span> <span class="o">=</span> <span class="n">metric</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">gold_swc_path</span><span class="p">,</span> <span class="n">pred_swc_path</span><span class="p">)</span>
 </code></pre></div>
 <p>Returns a <code>dict</code>.</p>
+<p>Both file paths and in-memory <code>SwcForest</code> objects are accepted by most metrics.
+When a metric accepts <code>scale</code>, it multiplies SWC coordinates by <code>(sx, sy, sz)</code>
+before comparison.</p>
 <hr />
 <h2 id="swclibmetricsssd_metricssdmetric"><code>swclib.metrics.ssd_metric.SSDMetric</code></h2>
 <p>Spatial distance metric.</p>
@@ -1461,11 +1542,12 @@
 <p>Edge-level path coverage metric.</p>
 <h3 id="constructor_1">Constructor</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">LengthMetric</span><span class="p">(</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">radius_threshold</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">length_threshold</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">radius_threshold</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">length_threshold</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">resample_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">resample_step</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">debug</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1480,14 +1562,14 @@
 <tr>
 <td><code>radius_threshold</code></td>
 <td><code>float</code></td>
-<td><code>5.0</code></td>
+<td><code>2.0</code></td>
 <td>Spatial tolerance for edge matching (µm)</td>
 </tr>
 <tr>
 <td><code>length_threshold</code></td>
 <td><code>float</code></td>
-<td><code>2.0</code></td>
-<td>Minimum edge length to evaluate (µm)</td>
+<td><code>0.2</code></td>
+<td>Minimum edge overlap length to count as matched (µm)</td>
 </tr>
 <tr>
 <td><code>scale</code></td>
@@ -1498,8 +1580,14 @@
 <tr>
 <td><code>resample_step</code></td>
 <td><code>float</code></td>
-<td><code>1.0</code></td>
-<td>Resampling step for edge comparison</td>
+<td><code>2.0</code></td>
+<td>Resampling step before edge comparison; use <code>None</code> to skip</td>
+</tr>
+<tr>
+<td><code>debug</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Print intermediate matching information</td>
 </tr>
 </tbody>
 </table>
@@ -1525,34 +1613,24 @@
 <td>Gold length covered by prediction</td>
 </tr>
 <tr>
-<td><code>f1_score</code></td>
+<td><code>f1</code></td>
 <td><code>float</code></td>
 <td>Harmonic mean of precision and recall</td>
 </tr>
 <tr>
 <td><code>TP</code></td>
-<td><code>int</code></td>
-<td>Matched edge count</td>
+<td><code>float</code></td>
+<td>Matched gold length</td>
 </tr>
 <tr>
 <td><code>FP</code></td>
-<td><code>int</code></td>
-<td>Unmatched predicted edge count</td>
+<td><code>float</code></td>
+<td>Predicted length not matched by gold</td>
 </tr>
 <tr>
 <td><code>FN</code></td>
-<td><code>int</code></td>
-<td>Unmatched gold edge count</td>
-</tr>
-<tr>
-<td><code>num_gt</code></td>
-<td><code>int</code></td>
-<td>Total gold edges</td>
-</tr>
-<tr>
-<td><code>num_pred</code></td>
-<td><code>int</code></td>
-<td>Total predicted edges</td>
+<td><code>float</code></td>
+<td>Gold length not matched by prediction</td>
 </tr>
 </tbody>
 </table>
@@ -1563,9 +1641,10 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">KeypointMetric</span><span class="p">(</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">keypoint_types</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;branch&quot;</span><span class="p">,</span> <span class="s2">&quot;leaf&quot;</span><span class="p">],</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">threshold_dis</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="mf">0.35</span><span class="p">,</span> <span class="mf">0.35</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">use_category</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;block&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1592,7 +1671,7 @@
 <tr>
 <td><code>scale</code></td>
 <td><code>tuple</code></td>
-<td><code>(1,1,1)</code></td>
+<td><code>(0.35,0.35,1)</code></td>
 <td>Coordinate scaling</td>
 </tr>
 <tr>
@@ -1600,6 +1679,12 @@
 <td><code>bool</code></td>
 <td><code>False</code></td>
 <td>Report per-type stats separately</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>str</code></td>
+<td><code>"block"</code></td>
+<td><code>"block"</code> counts isolated roots as leaves; <code>"whole"</code> does not</td>
 </tr>
 </tbody>
 </table>
@@ -1647,7 +1732,8 @@
 </tbody>
 </table>
 <p><strong>Per-category mode (<code>use_category=True</code>):</strong></p>
-<p>Result contains nested dicts <code>result["branch"]</code> and <code>result["leaf"]</code>, each with the same keys above.</p>
+<p>Result contains flat per-category fields such as <code>branch_precision</code>,
+<code>branch_recall</code>, <code>branch_f1</code>, <code>leaf_precision</code>, <code>leaf_recall</code>, and <code>leaf_f1</code>.</p>
 <hr />
 <h2 id="swclibmetricsfiber_metricfibermetric"><code>swclib.metrics.fiber_metric.FiberMetric</code></h2>
 <p>Fiber-level (root-to-leaf path) matching metric.</p>
@@ -1656,15 +1742,16 @@
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">iou_threshold</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">dist_threshold</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">dist_sample</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">align_roots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">align_roots_threshold</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">align_roots</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">align_roots_thredhold</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">resample_step</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
 <a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">only_from_soma</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">with_direction</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="n">use_category</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="n">min_fiber_length</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="p">)</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="n">min_fiber_length</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1697,14 +1784,14 @@
 <tr>
 <td><code>align_roots</code></td>
 <td><code>bool</code></td>
-<td><code>True</code></td>
-<td>Align tree roots before comparison</td>
+<td><code>False</code></td>
+<td>Align predicted roots to gold roots before comparison</td>
 </tr>
 <tr>
-<td><code>align_roots_threshold</code></td>
+<td><code>align_roots_thredhold</code></td>
 <td><code>float</code></td>
 <td><code>20.0</code></td>
-<td>Max distance to match roots</td>
+<td>Max distance to match roots. The parameter name intentionally follows the current source spelling</td>
 </tr>
 <tr>
 <td><code>scale</code></td>
@@ -1716,7 +1803,7 @@
 <td><code>resample_step</code></td>
 <td><code>float</code></td>
 <td><code>2.0</code></td>
-<td>Tree resampling step</td>
+<td>Tree resampling step; use <code>None</code> to skip</td>
 </tr>
 <tr>
 <td><code>only_from_soma</code></td>
@@ -1739,8 +1826,14 @@
 <tr>
 <td><code>min_fiber_length</code></td>
 <td><code>float</code></td>
-<td><code>0.0</code></td>
+<td><code>5.0</code></td>
 <td>Ignore fibers shorter than this (µm)</td>
+</tr>
+<tr>
+<td><code>eps</code></td>
+<td><code>float</code></td>
+<td><code>1e-6</code></td>
+<td>Numerical guard for length-ratio checks</td>
 </tr>
 </tbody>
 </table>
@@ -1802,7 +1895,7 @@
 <td>Fiber recall</td>
 </tr>
 <tr>
-<td><code>f1_score</code></td>
+<td><code>f1</code></td>
 <td><code>float</code></td>
 <td>Harmonic mean</td>
 </tr>
@@ -1843,8 +1936,8 @@
 </tr>
 <tr>
 <td><code>FN_fiber_ids</code></td>
-<td><code>list[list[int]]</code></td>
-<td>Node IDs of unmatched gold fibers</td>
+<td><code>list[list[int]]</code> or <code>None</code></td>
+<td>Node IDs of unmatched gold fibers when fiber details are requested</td>
 </tr>
 <tr>
 <td><code>gold_fibers</code></td>
@@ -1858,16 +1951,93 @@
 </tr>
 </tbody>
 </table>
-<p>With <code>use_category=True</code>, nested dicts <code>result["axon"]</code> and <code>result["dendrite"]</code> contain per-type stats.</p>
+<p>With <code>use_category=True</code>, the result includes flat axon and dendrite fields such
+as <code>axon_precision</code>, <code>axon_recall</code>, <code>axon_f1</code>, <code>dendrite_precision</code>,
+<code>dendrite_recall</code>, and <code>dendrite_f1</code>.</p>
+<hr />
+<h2 id="swclibmetricspoint_metricpointmetric"><code>swclib.metrics.point_metric.PointMetric</code></h2>
+<p>Point-level bidirectional nearest-neighbor metric over all resampled nodes.</p>
+<h3 id="constructor_4">Constructor</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">PointMetric</span><span class="p">(</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">dist_threshold</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">resample_step</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">)</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dist_threshold</code></td>
+<td><code>float</code></td>
+<td><code>4</code></td>
+<td>Nearest-neighbor match threshold</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>tuple</code></td>
+<td><code>(1,1,1)</code></td>
+<td>Coordinate scaling</td>
+</tr>
+<tr>
+<td><code>resample_step</code></td>
+<td><code>float</code> or <code>None</code></td>
+<td><code>2.0</code></td>
+<td>Resampling step before comparison</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rungold-pred-return_pointsfalse-dict"><code>run(gold, pred, return_points=False) → dict</code></h3>
+<p><strong>Returns:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>precision</code> / <code>recall</code> / <code>f1</code></td>
+<td><code>float</code></td>
+<td>Point-level scores</td>
+</tr>
+<tr>
+<td><code>MES</code></td>
+<td><code>float</code></td>
+<td>Morphology error score-style overlap ratio</td>
+</tr>
+<tr>
+<td><code>TP</code> / <code>FP</code> / <code>FN</code></td>
+<td><code>int</code></td>
+<td>Matched / extra / missed points</td>
+</tr>
+<tr>
+<td><code>S_G</code>, <code>S_hit_pred</code>, <code>S_miss</code>, <code>S_extra</code></td>
+<td><code>int</code></td>
+<td>Raw count terms used by MES</td>
+</tr>
+</tbody>
+</table>
+<p>When <code>return_points=True</code>, the result also includes nearest-neighbor distances,
+indices, matched pairs, missed/extra point IDs, and the coordinate arrays.</p>
 <hr />
 <h2 id="swclibmetricsmanagermetricmanager"><code>swclib.metrics.manager.MetricManager</code></h2>
 <p>Batch evaluation manager.</p>
-<h3 id="constructor_4">Constructor</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">MetricManager</span><span class="p">(</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">metric_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ssd&quot;</span><span class="p">,</span> <span class="s2">&quot;length&quot;</span><span class="p">,</span> <span class="s2">&quot;keypoints&quot;</span><span class="p">,</span> <span class="s2">&quot;fiber&quot;</span><span class="p">],</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">collect_method</span><span class="o">=</span><span class="s2">&quot;micro&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">)</span>
+<h3 id="constructor_5">Constructor</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">MetricManager</span><span class="p">(</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">metric_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ssd&quot;</span><span class="p">,</span> <span class="s2">&quot;length&quot;</span><span class="p">,</span> <span class="s2">&quot;keypoints&quot;</span><span class="p">,</span> <span class="s2">&quot;fiber&quot;</span><span class="p">],</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">collect_method</span><span class="o">=</span><span class="s2">&quot;micro&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1883,13 +2053,13 @@
 <td><code>metric_names</code></td>
 <td><code>list[str]</code></td>
 <td>All four</td>
-<td>Metrics to compute</td>
+<td>Metrics to compute. Supported names: <code>"ssd"</code>, <code>"point"</code>, <code>"length"</code>, <code>"keypoints"</code>, <code>"fiber"</code></td>
 </tr>
 <tr>
 <td><code>collect_method</code></td>
 <td><code>str</code></td>
 <td><code>"micro"</code></td>
-<td><code>"micro"</code> (aggregate TP/FP/FN) or <code>"macro"</code> (average P/R/F1)</td>
+<td>Current implementation supports <code>"micro"</code></td>
 </tr>
 <tr>
 <td><code>scale</code></td>
@@ -1902,15 +2072,21 @@
 <h3 id="methods">Methods</h3>
 <h4 id="update_metric_paramsmetric_params"><code>update_metric_params(metric_params)</code></h4>
 <p>Override default parameters for individual metrics.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">manager</span><span class="o">.</span><span class="n">update_metric_params</span><span class="p">({</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">&quot;fiber&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;iou_threshold&quot;</span><span class="p">:</span> <span class="mf">0.9</span><span class="p">,</span> <span class="s2">&quot;dist_threshold&quot;</span><span class="p">:</span> <span class="mf">3.0</span><span class="p">},</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="s2">&quot;keypoints&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold_dis&quot;</span><span class="p">:</span> <span class="mf">3.0</span><span class="p">},</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">})</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">manager</span><span class="o">.</span><span class="n">update_metric_params</span><span class="p">({</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s2">&quot;fiber&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;iou_threshold&quot;</span><span class="p">:</span> <span class="mf">0.9</span><span class="p">,</span> <span class="s2">&quot;dist_threshold&quot;</span><span class="p">:</span> <span class="mf">3.0</span><span class="p">},</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s2">&quot;keypoints&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold_dis&quot;</span><span class="p">:</span> <span class="mf">3.0</span><span class="p">},</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">})</span>
 </code></pre></div>
 <h4 id="add_dataswc_gt-swc_pred"><code>add_data(swc_gt, swc_pred)</code></h4>
 <p>Compute metrics for one gold/pred pair and store results.</p>
 <h4 id="collectsave_pathnone-dict"><code>collect(save_path=None) → dict</code></h4>
 <p>Aggregate stored results into a summary dict. Optionally save to JSON.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><code>MetricManager.collect()</code> assumes non-SSD metrics expose top-level <code>TP</code>,
+<code>FP</code>, and <code>FN</code>. Metrics configured with per-category output may need
+custom aggregation if you want category-specific summaries.</p>
+</div>
 
 
 

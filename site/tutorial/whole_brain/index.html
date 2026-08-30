@@ -1174,8 +1174,13 @@ one capture group matching the Z index of each slice file name.</p>
 <p>For whole-brain SWC files with large coordinate values, use <code>SwcReader</code> from the same module:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">swclib.whole_brain.swc_reader</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwcReader</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">nodes</span> <span class="o">=</span> <span class="n">SwcReader</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;whole_brain_neuron.swc&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># returns numpy array of shape (N, 7): [id, type, x, y, z, radius, parent]</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">reader</span> <span class="o">=</span> <span class="n">SwcReader</span><span class="p">(</span><span class="s2">&quot;whole_brain_neuron.swc&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">swc</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">read_region</span><span class="p">(</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">start</span><span class="o">=</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">2000</span><span class="p">,</span> <span class="mi">300</span><span class="p">),</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">end</span><span class="o">=</span><span class="p">(</span><span class="mi">1500</span><span class="p">,</span> <span class="mi">2500</span><span class="p">,</span> <span class="mi">400</span><span class="p">),</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">out_path</span><span class="o">=</span><span class="s2">&quot;local_neuron.swc&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># returns a swclib.data.swc.Swc object in local coordinates</span>
 </code></pre></div>
 
 

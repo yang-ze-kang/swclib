@@ -4,14 +4,16 @@ short-branch pruning.
 These passes operate on a neuron forest and are exposed two ways:
 
 * **Array level** (``_post_merge_forest_by_overlap``,
-  ``_post_prune_short_terminal_branches``) — operate on the
+  ``_post_prune_short_terminal_branches``,
+  ``_post_prune_terminal_branches_by_node_count``) — operate on the
   ``(points, parents, node_types)`` triple, where ``points`` is an ``(N, 3)``
   ``xyz`` float array, ``parents`` is an ``(N,)`` int array of **0-based parent
   indices** (root = ``-1``), and ``node_types`` is an ``(N,)`` int array. These
   keep the exact signatures/stats expected by existing array-based pipelines.
 
 * **``Swc`` level** (``merge_overlapping_branches``,
-  ``prune_short_terminal_branches``) — operate on a :class:`swclib.data.swc.Swc`
+  ``prune_short_terminal_branches``,
+  ``prune_terminal_branches_by_node_count``) — operate on a :class:`swclib.data.swc.Swc`
   and return ``(Swc, stats)``. Internally they convert to arrays via
   ``swc_to_arrays`` / ``swc_from_arrays``.
 
@@ -454,6 +456,144 @@ def _merge_component_to_forest_lists(
     return local_to_out, new_indices
 
 
+def _post_merge_overlapping_paths(
+    points: np.ndarray,
+    parents: np.ndarray,
+    node_types: np.ndarray,
+    dist_sample: float,
+    dist_threshold: float,
+    min_overlap_length: float,
+    min_overlap_ratio: float,
+    min_iou: float,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
+    """Rebuild a forest path-by-path, merging overlapping paths inside components."""
+    components = _forest_connected_components(parents)
+    paths: List[List[int]] = []
+    path_node_set = set()
+    for component in components:
+        for path_indices in _component_path_indices(parents, component):
+            paths.append([int(idx) for idx in path_indices])
+            path_node_set.update(int(idx) for idx in path_indices)
+
+    stats: Dict[str, Any] = {
+        "enabled": True,
+        "input_nodes": int(points.shape[0]),
+        "input_paths": int(len(paths)),
+        "merged_paths": 0,
+        "path_logs": [],
+    }
+    if not paths:
+        stats["output_nodes"] = int(points.shape[0])
+        stats["output_components"] = int(len(_forest_connected_components(parents)))
+        return points, parents, node_types, stats
+
+    out_points: List[np.ndarray] = []
+    out_parents: List[int] = []
+    out_node_types: List[int] = []
+    original_to_out: Dict[int, int] = {}
+
+    # Preserve DFS path order so later duplicate branches are removed instead of
+    # replacing an earlier branch that shares the same bifurcation point.
+    for path_order, path_indices in enumerate(paths):
+        path_array = np.asarray(path_indices, dtype=np.int64)
+        source_points = points[path_array]
+        source_node_types = node_types[path_array]
+        source_parents = np.full((len(path_indices),), -1, dtype=np.int64)
+        if len(path_indices) > 1:
+            source_parents[1:] = np.arange(0, len(path_indices) - 1, dtype=np.int64)
+
+        mapped_nodes: Dict[int, int] = {
+            int(local_idx): int(original_to_out[int(old_idx)])
+            for local_idx, old_idx in enumerate(path_indices)
+            if int(old_idx) in original_to_out
+        }
+        identity_mapped = int(len(mapped_nodes))
+        geometric_mapped = 0
+        if out_points:
+            target_points = np.stack(out_points, axis=0).astype(np.float32)
+            target_parents = np.asarray(out_parents, dtype=np.int64)
+            geom_mapping, _ = _find_overlap_merge_targets(
+                source_points=source_points,
+                source_parents=source_parents,
+                target_points=target_points,
+                target_parents=target_parents,
+                dist_sample=dist_sample,
+                dist_threshold=dist_threshold,
+                min_overlap_length=min_overlap_length,
+                min_overlap_ratio=min_overlap_ratio,
+                min_iou=min_iou,
+            )
+            for local_idx, target_idx in geom_mapping.items():
+                if int(local_idx) not in mapped_nodes:
+                    mapped_nodes[int(local_idx)] = int(target_idx)
+                    geometric_mapped += 1
+
+        if identity_mapped > 0 and geometric_mapped > 0:
+            stats["merged_paths"] = int(stats["merged_paths"]) + 1
+            stats["path_logs"].append(
+                {
+                    "path_order": int(path_order),
+                    "action": "delete_overlapping_branch",
+                    "input_nodes": int(len(path_indices)),
+                    "identity_mapped_nodes": int(identity_mapped),
+                    "geometric_mapped_nodes": int(geometric_mapped),
+                    "new_nodes": 0,
+                }
+            )
+            continue
+
+        local_to_out, new_indices = _merge_component_to_forest_lists(
+            source_points=source_points,
+            source_parents=source_parents,
+            source_node_types=source_node_types,
+            component_indices=list(range(len(path_indices))),
+            mapped_nodes=mapped_nodes,
+            out_points=out_points,
+            out_parents=out_parents,
+            out_node_types=out_node_types,
+        )
+        for local_idx, old_idx in enumerate(path_indices):
+            original_to_out.setdefault(int(old_idx), int(local_to_out[int(local_idx)]))
+
+        if len(new_indices) < len(path_indices):
+            stats["merged_paths"] = int(stats["merged_paths"]) + 1
+        stats["path_logs"].append(
+            {
+                "path_order": int(path_order),
+                "input_nodes": int(len(path_indices)),
+                "identity_mapped_nodes": int(identity_mapped),
+                "geometric_mapped_nodes": int(geometric_mapped),
+                "new_nodes": int(len(new_indices)),
+            }
+        )
+
+    isolated = [
+        int(idx)
+        for idx in range(int(points.shape[0]))
+        if int(idx) not in path_node_set
+    ]
+    for node_idx in isolated:
+        if node_idx in original_to_out:
+            continue
+        out_idx = len(out_points)
+        out_points.append(points[node_idx].astype(np.float32, copy=True))
+        out_parents.append(-1)
+        out_node_types.append(int(node_types[node_idx]))
+        original_to_out[node_idx] = out_idx
+
+    if not out_points:
+        stats["output_nodes"] = 0
+        stats["output_components"] = 0
+        return points[:0], parents[:0], node_types[:0], stats
+
+    out_points_np = np.stack(out_points, axis=0).astype(np.float32)
+    out_parents_np = np.asarray(out_parents, dtype=np.int64)
+    out_node_types_np = np.asarray(out_node_types, dtype=np.int64)
+    stats["output_nodes"] = int(out_points_np.shape[0])
+    stats["output_components"] = int(len(_forest_connected_components(out_parents_np)))
+    return out_points_np, out_parents_np, out_node_types_np, stats
+
+
 # ---------------------------------------------------------------------------
 # Array-level post-processing ops
 # ---------------------------------------------------------------------------
@@ -519,15 +659,37 @@ def _post_merge_forest_by_overlap(
             )
         else:
             target_points = np.stack(out_points, axis=0).astype(np.float32)
-            mapped_nodes = _nearest_existing_node_mapping(
-                source_points=points,
-                component_indices=component_indices,
-                target_points=target_points,
-                radius=dist_threshold,
+            target_parents = np.asarray(out_parents, dtype=np.int64)
+            component_array = np.asarray(component_indices, dtype=np.int64)
+            source_local_points = points[component_array]
+            old_to_local = {
+                int(old): int(pos)
+                for pos, old in enumerate(component_array.tolist())
+            }
+            source_local_parents = np.asarray(
+                [
+                    old_to_local.get(int(parents[int(old_idx)]), -1)
+                    for old_idx in component_array
+                ],
+                dtype=np.int64,
             )
+            local_mapped_nodes, mapping_stats = _find_overlap_merge_targets(
+                source_points=source_local_points,
+                source_parents=source_local_parents,
+                target_points=target_points,
+                target_parents=target_parents,
+                dist_sample=dist_sample,
+                dist_threshold=dist_threshold,
+                min_overlap_length=min_overlap_length,
+                min_overlap_ratio=min_overlap_ratio,
+                min_iou=min_iou,
+            )
+            mapped_nodes = {
+                int(component_array[int(local_idx)]): int(target_idx)
+                for local_idx, target_idx in local_mapped_nodes.items()
+            }
             if not mapped_nodes:
-                component_array = np.asarray(component_indices, dtype=np.int64)
-                source_subset = points[component_array]
+                source_subset = source_local_points
                 delta = source_subset[:, None, :] - target_points[None]
                 dist2 = np.einsum("ijk,ijk->ij", delta, delta)
                 flat_idx = int(np.argmin(dist2))
@@ -551,6 +713,7 @@ def _post_merge_forest_by_overlap(
                 "input_nodes": int(len(component_indices)),
                 "mapped_nodes": int(len(mapped_nodes)),
                 "new_nodes": int(len(new_indices)),
+                "path_mapping": mapping_stats,
             }
             component_log.update(match)
             stats["component_logs"].append(component_log)
@@ -572,6 +735,17 @@ def _post_merge_forest_by_overlap(
     out_points_np = np.stack(out_points, axis=0).astype(np.float32)
     out_parents_np = np.asarray(out_parents, dtype=np.int64)
     out_node_types_np = np.asarray(out_node_types, dtype=np.int64)
+    out_points_np, out_parents_np, out_node_types_np, path_stats = _post_merge_overlapping_paths(
+        out_points_np,
+        out_parents_np,
+        out_node_types_np,
+        dist_sample=dist_sample,
+        dist_threshold=dist_threshold,
+        min_overlap_length=min_overlap_length,
+        min_overlap_ratio=min_overlap_ratio,
+        min_iou=min_iou,
+    )
+    stats["internal_path_merge"] = path_stats
     stats["output_nodes"] = int(out_points_np.shape[0])
     stats["output_components"] = int(len(_forest_connected_components(out_parents_np)))
     return out_points_np, out_parents_np, out_node_types_np, stats
@@ -681,6 +855,116 @@ def _post_prune_short_terminal_branches(
                     "leaf_index": int(leaf),
                     "anchor_index": int(anchor_idx),
                     "length": float(branch_length),
+                    "removed_node_indices": [int(idx) for idx in path_nodes],
+                }
+            )
+
+        if not remove_nodes:
+            break
+
+        keep_mask = np.ones((int(current_points.shape[0]),), dtype=bool)
+        keep_mask[np.asarray(sorted(remove_nodes), dtype=np.int64)] = False
+        current_points, current_parents, current_node_types = _compact_forest_by_keep_mask(
+            current_points,
+            current_parents,
+            current_node_types,
+            keep_mask,
+        )
+        stats["removed_nodes"] = int(stats["removed_nodes"]) + int(len(remove_nodes))
+        stats["removed_branches"] = int(stats["removed_branches"]) + int(len(branch_logs))
+        stats["iteration_logs"].append(
+            {
+                "iteration": int(iteration + 1),
+                "removed_nodes": int(len(remove_nodes)),
+                "removed_branches": int(len(branch_logs)),
+                "branches": branch_logs,
+            }
+        )
+
+    stats["output_nodes"] = int(current_points.shape[0])
+    stats["output_components"] = int(len(_forest_connected_components(current_parents)))
+    return current_points, current_parents, current_node_types, stats
+
+
+def _post_prune_terminal_branches_by_node_count(
+    points: np.ndarray,
+    parents: np.ndarray,
+    node_types: np.ndarray,
+    min_node_count: int,
+    max_iterations: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
+    current_points = np.asarray(points, dtype=np.float32)
+    current_parents = np.asarray(parents, dtype=np.int64)
+    current_node_types = np.asarray(node_types, dtype=np.int64)
+    min_node_count = int(min_node_count)
+    max_iterations = max(1, int(max_iterations))
+    stats: Dict[str, Any] = {
+        "enabled": True,
+        "input_nodes": int(current_points.shape[0]),
+        "input_components": int(len(_forest_connected_components(current_parents))),
+        "min_node_count": int(min_node_count),
+        "max_iterations": int(max_iterations),
+        "removed_nodes": 0,
+        "removed_branches": 0,
+        "iteration_logs": [],
+    }
+    if current_points.shape[0] < 2 or min_node_count <= 1:
+        stats["output_nodes"] = int(current_points.shape[0])
+        stats["output_components"] = int(len(_forest_connected_components(current_parents)))
+        return current_points, current_parents, current_node_types, stats
+
+    for iteration in range(max_iterations):
+        if current_points.shape[0] < 2:
+            break
+        neighbors = _neighbors_from_parents(current_parents)
+        degrees = np.asarray([len(item) for item in neighbors], dtype=np.int64)
+        roots = {int(idx) for idx in np.flatnonzero(current_parents < 0).tolist()}
+        components = _forest_connected_components(current_parents)
+        component_sizes: Dict[int, int] = {}
+        for component in components:
+            for node_idx in component:
+                component_sizes[int(node_idx)] = int(len(component))
+
+        remove_nodes: set = set()
+        branch_logs: List[Dict[str, Any]] = []
+        endpoints = [int(idx) for idx in np.flatnonzero(degrees <= 1).tolist()]
+        for leaf in endpoints:
+            if leaf in remove_nodes or int(degrees[leaf]) != 1:
+                continue
+
+            path_nodes = [int(leaf)]
+            prev_idx = int(leaf)
+            current_idx = int(neighbors[leaf][0])
+
+            while int(degrees[current_idx]) == 2 and current_idx not in roots:
+                path_nodes.append(int(current_idx))
+                next_candidates = [
+                    int(idx) for idx in neighbors[current_idx] if int(idx) != prev_idx
+                ]
+                if not next_candidates:
+                    break
+                next_idx = int(next_candidates[0])
+                prev_idx = int(current_idx)
+                current_idx = int(next_idx)
+
+            anchor_idx = int(current_idx)
+            if anchor_idx in path_nodes:
+                continue
+            if anchor_idx not in roots and int(degrees[anchor_idx]) <= 1:
+                continue
+            if len(path_nodes) + 1 >= int(component_sizes.get(leaf, current_points.shape[0])):
+                continue
+            if len(path_nodes) >= min_node_count:
+                continue
+            if any(int(node_idx) in remove_nodes for node_idx in path_nodes):
+                continue
+
+            remove_nodes.update(int(node_idx) for node_idx in path_nodes)
+            branch_logs.append(
+                {
+                    "leaf_index": int(leaf),
+                    "anchor_index": int(anchor_idx),
+                    "node_count": int(len(path_nodes)),
                     "removed_node_indices": [int(idx) for idx in path_nodes],
                 }
             )
@@ -827,6 +1111,28 @@ def prune_short_terminal_branches(
         parents,
         node_types,
         min_length=min_length,
+        max_iterations=max_iterations,
+    )
+    return swc_from_arrays(points, parents, node_types), stats
+
+
+def prune_terminal_branches_by_node_count(
+    swc: Any,
+    min_node_count: int,
+    max_iterations: int,
+) -> Tuple[Any, Dict[str, Any]]:
+    """Iteratively prune terminal branches with too few nodes from a :class:`Swc`.
+
+    The counted nodes are the removable branch nodes from leaf back to, but not
+    including, the branch/root anchor. Branches with node count lower than
+    ``min_node_count`` are removed. Returns ``(Swc, stats)``.
+    """
+    points, parents, node_types = swc_to_arrays(swc)
+    points, parents, node_types, stats = _post_prune_terminal_branches_by_node_count(
+        points,
+        parents,
+        node_types,
+        min_node_count=min_node_count,
         max_iterations=max_iterations,
     )
     return swc_from_arrays(points, parents, node_types), stats

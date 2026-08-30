@@ -239,6 +239,65 @@ class Swc(object):
         self.bound_box = [min(xs), min(ys), min(zs), max(xs), max(ys), max(zs)]
         return self.bound_box
 
+    def read_region(
+        self,
+        start,
+        end,
+        out_path: str = None,
+        out_r=None,
+    ):
+        """
+        Read nodes in a cube and return them as a local-coordinate Swc object.
+
+        Nodes are reindexed to 1..N. If a kept node's parent is outside the
+        region, that node becomes a root in the returned SWC.
+        """
+        x0, y0, z0 = start
+        x1, y1, z1 = end
+
+        kept_nodes = [
+            (old_id, node)
+            for old_id, node in self.nodes.items()
+            if x0 <= node["x"] < x1
+            and y0 <= node["y"] < y1
+            and z0 <= node["z"] < z1
+        ]
+
+        swc = Swc()
+        if len(kept_nodes) == 0:
+            if out_path is not None:
+                swc.save_to_swc(out_path, write_header=False)
+            return swc
+
+        oldid2newid = {
+            int(old_id): new_id
+            for new_id, (old_id, _) in enumerate(kept_nodes, start=1)
+        }
+
+        for old_id, old_node in kept_nodes:
+            old_id = int(old_id)
+            new_id = oldid2newid[old_id]
+            old_parent = int(old_node["parent"])
+            new_parent = oldid2newid.get(old_parent, -1)
+            radius = out_r if out_r is not None else old_node["radius"]
+
+            swc.nodes[new_id] = {
+                "id": new_id,
+                "type": int(old_node["type"]),
+                "x": float(old_node["x"] - x0),
+                "y": float(old_node["y"] - y0),
+                "z": float(old_node["z"] - z0),
+                "radius": float(radius),
+                "parent": new_parent,
+            }
+            swc.edges.append((new_id, new_parent))
+
+        swc._refresh_bound_box()
+
+        if out_path is not None:
+            swc.save_to_swc(out_path, write_header=False)
+        return swc
+
     def rescale(self, scale):
         """
         Rescale the coordinates of all nodes by the given scale factor.
