@@ -76,9 +76,28 @@ print(swc.bound_box)
 ### Spatial density
 
 ```python
-# Fraction of volume within 'dis' µm that contains neuron nodes
-density = swc.get_density(dis=10.0, p=0.3, exclude_hops=1)
+# Spatial density in a 10-voxel neighborhood (mean spacing)
+density_mean = swc.get_density()
+
+# Closest non-topological crossing/overlap in the same neighborhood
+density_min = swc.get_density(reduction="min")
+
+# Explicit parameters
+density_mean = swc.get_density(
+    dis=2.0,
+    r=10.0,
+    exclude_hops=5,
+    reduction="mean",
+)
 ```
+
+The SWC is resampled at ``dis``. For every node, all Euclidean neighbors within
+``r`` are retained after removing ancestor/descendant nodes at most
+``exclude_hops`` hops away. Exclusion does not cross a branch through a parent,
+so sibling subtrees remain eligible neighbors. The selected distances are pooled, reduced by ``mean`` or ``min``,
+and normalized as ``clip((r - statistic) / r, 0, 1)``. A value near `1` means
+that non-topological fibers are spatially close; `0` means no retained point
+is inside the radius or the selected statistic reaches the radius.
 
 ### Detecting crossings
 

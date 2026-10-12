@@ -528,20 +528,11 @@ def _post_merge_overlapping_paths(
                     mapped_nodes[int(local_idx)] = int(target_idx)
                     geometric_mapped += 1
 
-        if identity_mapped > 0 and geometric_mapped > 0:
-            stats["merged_paths"] = int(stats["merged_paths"]) + 1
-            stats["path_logs"].append(
-                {
-                    "path_order": int(path_order),
-                    "action": "delete_overlapping_branch",
-                    "input_nodes": int(len(path_indices)),
-                    "identity_mapped_nodes": int(identity_mapped),
-                    "geometric_mapped_nodes": int(geometric_mapped),
-                    "new_nodes": 0,
-                }
-            )
-            continue
-
+        # Root-to-leaf paths from one tree share exact prefix nodes by design.
+        # A few additional geometric matches near the split therefore do not
+        # prove that the whole later path is a duplicate: its unmatched suffix
+        # may be a real branch. Merge the mapped prefix and let this helper keep
+        # any divergent tail. A fully duplicate path still yields no new nodes.
         local_to_out, new_indices = _merge_component_to_forest_lists(
             source_points=source_points,
             source_parents=source_parents,
@@ -557,15 +548,18 @@ def _post_merge_overlapping_paths(
 
         if len(new_indices) < len(path_indices):
             stats["merged_paths"] = int(stats["merged_paths"]) + 1
-        stats["path_logs"].append(
-            {
-                "path_order": int(path_order),
-                "input_nodes": int(len(path_indices)),
-                "identity_mapped_nodes": int(identity_mapped),
-                "geometric_mapped_nodes": int(geometric_mapped),
-                "new_nodes": int(len(new_indices)),
-            }
-        )
+        path_log = {
+            "path_order": int(path_order),
+            "input_nodes": int(len(path_indices)),
+            "identity_mapped_nodes": int(identity_mapped),
+            "geometric_mapped_nodes": int(geometric_mapped),
+            "new_nodes": int(len(new_indices)),
+        }
+        if len(new_indices) == 0:
+            path_log["action"] = "delete_overlapping_branch"
+        elif identity_mapped > 0 and geometric_mapped > 0:
+            path_log["action"] = "merge_overlapping_prefix_preserve_tail"
+        stats["path_logs"].append(path_log)
 
     isolated = [
         int(idx)

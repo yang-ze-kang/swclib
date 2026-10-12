@@ -5,7 +5,6 @@ from copy import deepcopy
 import math
 from datetime import datetime, timezone
 
-from swclib.data.swc_node import nodes2coords
 from swclib.utils.points import cal_segment_length
 
 
@@ -693,142 +692,237 @@ class Swc(object):
                     min_dist = dist
         return min_dist, matched_pair
 
-    def get_density(self, dis=10.0, p=0.3, exclude_hops=1):
-        """
-        Compute swc density.
+    def get_density(self, dis=2.0, r=10.0, exclude_hops=5, reduction="mean"):
+        """Estimate spatial density from points inside a fixed radius.
+
+        The SWC is resampled at ``dis``. For every node, all Euclidean
+        neighbors within ``r`` are collected after removing the node itself
+        and ancestor/descendant nodes at most ``exclude_hops`` edges away in
+        the SWC graph.  The exclusion does not cross a branch through a
+        parent, so sibling subtrees remain eligible spatial neighbors.
+        The retained distances are pooled across query nodes and reduced by
+        ``reduction``. The result is normalized as
+        ``clip((r - statistic) / r, 0, 1)``.
+
+        ``reduction="mean"`` measures the typical non-topological spacing;
+        ``reduction="min"`` reports the closest spatial crossing or overlap.
+        Nodes from disconnected components are valid spatial neighbors.
 
         Parameters
         ----------
         dis : float
-            Resampling distance (also controls point spacing after resample).
-        in_place : bool
-            Whether resampling modifies self in-place.
+            Positive, finite resampling distance in the SWC coordinate unit.
+        r : float
+            Positive, finite Euclidean search radius. The default ``10.0``
+            is intended for a 10-voxel neighborhood.
         exclude_hops : int
-            Topological exclusion radius in hops.
-            - 1 means exclude only direct neighbors (parent/child).
-            - 2 means also exclude neighbors within 2 hops, etc.
-        Returns: float, density value
-        -------
+            Number of ancestor/descendant hops to exclude, including the
+            query node. ``0`` excludes only the node itself; ``1`` excludes
+            its direct parent and children as well. A path cannot cross a
+            parent to reach a sibling branch.
+        reduction : {"mean", "min"}
+            Statistic used over all retained neighbor distances. ``minimum``
+            is accepted as an alias for ``min``.
 
+        Returns
+        -------
+        float
+            A value in ``[0, 1]``. Returns ``0.0`` when no retained neighbor
+            lies within the search radius.
         """
-        from swclib.data.swc_forest import SwcForest
+        from numbers import Integral
+
+        dis = float(dis)
+        r = float(r)
+        if not np.isfinite(dis) or dis <= 0:
+            raise ValueError("dis must be a positive finite number")
+        if not np.isfinite(r) or r <= 0:
+            raise ValueError("r must be a positive finite number")
+        if not isinstance(exclude_hops, Integral) or isinstance(exclude_hops, bool):
+            raise TypeError("exclude_hops must be an integer")
+        exclude_hops = int(exclude_hops)
+        if exclude_hops < 0:
+            raise ValueError("exclude_hops must be non-negative")
+        reduction = str(reduction).strip().lower()
+        if reduction == "minimum":
+            reduction = "min"
+        if reduction not in {"mean", "min"}:
+            raise ValueError("reduction must be 'mean' or 'min'")
+
+        if self.nodes:
+            raw_coords = np.asarray(
+                [
+                    [node["x"], node["y"], node["z"]]
+                    for node in self.nodes.values()
+                ],
+                dtype=float,
+            )
+            if not np.isfinite(raw_coords).all():
+                raise ValueError("SWC coordinates must be finite")
 
         swc = self.resample(min_distance=dis, in_place=False)
-
-        swc_tree = SwcForest(swc)
-        components = swc_tree.get_components()
-
-        coords, node_ids = [], []
-        for comp in components:
-            if len(comp) <= 2 + exclude_hops:
-                continue
-            coord = nodes2coords(comp)
-            coords.append(coord)
-            node_ids.extend([node.nid for node in comp])
-        if len(coords) == 0:
+        if not swc.nodes:
             return 0.0
-        coords = np.vstack(coords)
-        id2idx = {nid: i for i, nid in enumerate(node_ids)}
 
-        n = len(coords)
-        if n <= 2 + exclude_hops:
+        node_ids = list(swc.nodes.keys())
+        id2idx = {nid: idx for idx, nid in enumerate(node_ids)}
+        coords = np.asarray(
+            [
+                [node["x"], node["y"], node["z"]]
+                for node in (swc.nodes[nid] for nid in node_ids)
+            ],
+            dtype=float,
+        )
+        if not np.isfinite(coords).all():
+            raise ValueError("SWC coordinates must be finite")
+
+        n = len(node_ids)
+        if n < 2:
             return 0.0
+
+        # Build one indexed adjacency graph from parent fields.  This keeps
+        # the topological exclusion logic consistent with the SWC itself and
+        # avoids constructing a recursive anytree forest for every query.
+        adj = [set() for _ in range(n)]
+        parent_indices = None
+        if exclude_hops <= 1:
+            # The common path only needs direct parent/child adjacency.
+            for idx, nid in enumerate(node_ids):
+                pid = int(swc.nodes[nid]["parent"])
+                parent_idx = id2idx.get(pid)
+                if parent_idx is None:
+                    continue
+                adj[idx].add(parent_idx)
+                adj[parent_idx].add(idx)
+        else:
+            parent_indices = np.full(n, -1, dtype=np.int64)
+            for idx, nid in enumerate(node_ids):
+                pid = int(swc.nodes[nid]["parent"])
+                parent_idx = id2idx.get(pid)
+                if parent_idx is None:
+                    continue
+                parent_indices[idx] = parent_idx
+                adj[idx].add(parent_idx)
+                adj[parent_idx].add(idx)
+
+        # For h > 1, checking lineage membership by walking parent pointers
+        # for every candidate can be quadratic on a deep tree.  Precompute
+        # depths, component labels, and an ancestor jump table instead.  A
+        # lineage-distance query then costs O(log N) and uses O(N log N)
+        # memory, independent of the requested hop radius.
+        component = depth = None
+        up = None
+        if exclude_hops > 1:
+            component = np.full(n, -1, dtype=np.int64)
+            depth = np.zeros(n, dtype=np.int64)
+            children = [[] for _ in range(n)]
+            for child, parent_idx in enumerate(parent_indices):
+                if parent_idx >= 0:
+                    children[int(parent_idx)].append(child)
+
+            # Traverse from roots through directed children so ``depth``
+            # agrees with the parent pointers.  Node order in an SWC file is
+            # not required to be parent-before-child.
+            component_id = 0
+            for root in np.flatnonzero(parent_indices < 0):
+                root = int(root)
+                if component[root] >= 0:
+                    continue
+                component[root] = component_id
+                stack = [root]
+                while stack:
+                    current = stack.pop()
+                    for child in children[current]:
+                        if component[child] >= 0:
+                            continue
+                        component[child] = component_id
+                        depth[child] = depth[current] + 1
+                        stack.append(child)
+                component_id += 1
+
+            # A valid SWC forest has at least one root per component.  Keep a
+            # defensive fallback for malformed input so the function still
+            # returns a finite result instead of looping forever.
+            for start in range(n):
+                if component[start] >= 0:
+                    continue
+                component[start] = component_id
+                stack = [start]
+                while stack:
+                    current = stack.pop()
+                    for neighbor in adj[current]:
+                        if component[neighbor] >= 0:
+                            continue
+                        component[neighbor] = component_id
+                        depth[neighbor] = depth[current] + 1
+                        stack.append(neighbor)
+                component_id += 1
+
+            max_depth = int(depth.max()) if n else 0
+            levels = max(1, max_depth.bit_length() + 1)
+            # A root is its own ancestor.  This avoids sentinel indexing in
+            # the jump table and keeps disconnected roots independent via the
+            # component check below.
+            up = np.empty((levels, n), dtype=np.int64)
+            up[0] = np.where(parent_indices >= 0, parent_indices, np.arange(n))
+            for level in range(1, levels):
+                up[level] = up[level - 1][up[level - 1]]
+
+        def _lineage_distance(first, second):
+            """Return ancestor/descendant distance, or infinity otherwise."""
+            if component[first] != component[second]:
+                return np.inf
+
+            if depth[first] <= depth[second]:
+                ancestor, descendant = first, second
+            else:
+                ancestor, descendant = second, first
+
+            diff = int(depth[descendant] - depth[ancestor])
+            level = 0
+            lifted = descendant
+            remaining = diff
+            while remaining:
+                if remaining & 1:
+                    lifted = int(up[level, lifted])
+                remaining >>= 1
+                level += 1
+            return diff if lifted == ancestor else np.inf
 
         tree = cKDTree(coords)
+        distances = []
+        for idx in range(n):
+            if exclude_hops == 0:
+                def is_excluded(candidate_idx):
+                    return candidate_idx == idx
+            elif exclude_hops == 1:
+                excluded = adj[idx]
 
-        # -------- Build adjacency (undirected) for hop-based exclusion --------
-        # edges are stored as (id, pid); ignore pid = -1 or missing.
-        adj = {nid: set() for nid in node_ids}
-        for nid, pid in swc.edges:
-            if nid not in node_ids:
-                continue
-            if pid == -1:
-                continue
-            if nid not in swc.nodes or pid not in swc.nodes:
-                continue
-            adj[nid].add(pid)
-            adj[pid].add(nid)
+                def is_excluded(candidate_idx):
+                    return candidate_idx == idx or candidate_idx in excluded
+            else:
+                def is_excluded(candidate_idx):
+                    return _lineage_distance(idx, candidate_idx) <= exclude_hops
 
-        def _excluded_set(start_nid, hops):
-            """
-            Nodes to exclude from nearest-neighbor search: within <=hops topological steps.
-            hops=1 -> {parent/child + self}
-            """
-            if hops <= 0:
-                return {start_nid}
-            seen = {start_nid}
-            frontier = {start_nid}
-            for _ in range(hops):
-                new_frontier = set()
-                for u in frontier:
-                    for v in adj.get(u, ()):
-                        if v not in seen:
-                            seen.add(v)
-                            new_frontier.add(v)
-                frontier = new_frontier
-                if not frontier:
-                    break
-            return seen
+            # Query the complete radius rather than only the nearest point;
+            # this makes the mean statistic represent the requested spatial
+            # neighborhood and lets ``min`` expose the closest crossing.
+            for candidate_idx in tree.query_ball_point(coords[idx], r):
+                candidate_idx = int(candidate_idx)
+                if is_excluded(candidate_idx):
+                    continue
+                distance = float(np.linalg.norm(coords[idx] - coords[candidate_idx]))
+                if distance <= r + 1e-12:
+                    distances.append(distance)
 
-        # Precompute excluded sets if you want speed; for hop=1 it's cheap anyway.
-        # For large n and larger exclude_hops, you may want to cache or limit.
-        excluded_cache = {}
-        if exclude_hops <= 1:
-            # Fast path: exclude only direct neighbors + self
-            for nid in node_ids:
-                s = {nid}
-                s |= adj.get(nid, set())
-                excluded_cache[nid] = s
-        else:
-            for nid in node_ids:
-                excluded_cache[nid] = _excluded_set(nid, exclude_hops)
+        if not distances:
+            return 0.0
 
-        # -------- For each node, find nearest valid (non-excluded) neighbor --------
-        dlist = []
-
-        # Start with a small k and expand if needed
-        k0 = min(16, n)
-        for nid in node_ids:
-            idx0 = id2idx[nid]
-            excluded = excluded_cache[nid]
-            if len(excluded) == n:
-                # all nodes are excluded (rare: tiny component)
-                continue
-
-            k = k0
-            found = None
-
-            while True:
-                # query k nearest (includes itself at rank 0)
-                dists, idxs = tree.query(coords[idx0], k=k)
-
-                # Make them iterable even when k==1
-                if np.isscalar(dists):
-                    dists = np.array([dists])
-                    idxs = np.array([idxs])
-
-                # Scan candidates in increasing distance
-                for dist, j in zip(dists, idxs):
-                    cand_nid = node_ids[int(j)]
-                    if cand_nid in excluded:
-                        continue
-                    found = float(dist)
-                    break
-
-                if found is not None:
-                    break
-
-                if k >= n:
-                    break  # no valid match exists (rare: tiny component)
-                k = min(n, k * 2)
-            assert found is not None
-            dlist.append(found)
-
-        dlist = np.sort(dlist)
-        dlist = dlist[: -int(len(dlist) * p)]
-        mean_dist = float(np.mean(dlist))
-        density = np.clip(1 - mean_dist / (dis * exclude_hops * 2), 0.0, 1.0)
-        return float(density)
+        distances = np.asarray(distances, dtype=float)
+        statistic = float(
+            np.mean(distances) if reduction == "mean" else np.min(distances)
+        )
+        return float(np.clip((r - statistic) / r, 0.0, 1.0))
 
     def remove_duplicate_nodes(
         self,

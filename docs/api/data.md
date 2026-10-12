@@ -106,8 +106,14 @@ become roots.
 
 ---
 
-#### `get_density(dis=10.0, p=0.3, exclude_hops=1) → float`
-Estimates local spatial density of the neuron.
+#### `get_density(dis=2.0, r=10.0, exclude_hops=5, reduction="mean") → float`
+Estimates spatial density from all spatial neighbors within radius `r` after
+resampling, excluding the query node and its ancestor/descendant nodes up to
+`exclude_hops`. Exclusion does not cross a branch through a parent, so sibling
+subtrees remain eligible neighbors. `reduction="mean"` uses the mean retained
+distance; `reduction="min"` uses the closest retained distance. The result is
+`clip((r - statistic) / r, 0, 1)`. `minimum` is accepted as an alias for `min`.
+The value is `0.0` when no retained neighbor is inside the radius.
 
 ---
 
