@@ -1,21 +1,20 @@
-from tracemalloc import start
-
 import rasterio
 from rasterio.windows import Window
 import tifffile
 import numpy as np
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from ._volume import VolumeReader, read_parallel
 
 
-class WBTReader:
+class WBTReader(VolumeReader):
     """
     Reader class for 3D image slice data
-    Supports reading arbitrary 3D regions from multiple 2D slice files
+    Regions, dimensions and arrays follow axis_order (default ZYX).
     """
 
-    def __init__(self, slice_dir, slice_name_pattern, slice_ext=".tif"):
+    def __init__(self, slice_dir, slice_name_pattern, slice_ext=".tif", axis_order="ZYX"):
+        super().__init__(axis_order=axis_order)
         self.slice_dir = slice_dir
         slice_ext = slice_ext.lower()
         if not slice_ext.startswith("."):
@@ -27,14 +26,22 @@ class WBTReader:
             if file.lower().endswith(slice_ext)
         ]
         pattern = re.compile(slice_name_pattern)
+        if not files:
+            raise ValueError("Slice directory contains no matching image files")
+        if pattern.groups != 1:
+            raise ValueError("slice_name_pattern must contain one Z-index capture group")
+        if any(pattern.match(os.path.basename(path)) is None for path in files):
+            raise ValueError("Some slice filenames do not match slice_name_pattern")
         files = sorted(files, key=lambda x: int(pattern.match(os.path.basename(x)).group(1)))
         start_z = int(pattern.match(os.path.basename(files[0])).group(1))
         end_z  = int(pattern.match(os.path.basename(files[-1])).group(1))
+        indices = [int(pattern.match(os.path.basename(path)).group(1)) for path in files]
+        if start_z < 0 or indices != list(range(start_z, end_z + 1)):
+            raise ValueError("Slice Z indices must be nonnegative, unique and continuous")
         self.slice_paths = []
         if start_z > 0:
             self.slice_paths = [None] * start_z
         self.slice_paths += files
-        assert len(self.slice_paths) == end_z + 1, "Slice files are not continuous from 0 to max_z"
         self.start_z = start_z
         self.end_z = end_z
         self._init_dimensions()
@@ -49,9 +56,6 @@ class WBTReader:
 
         self.depth = len(self.slice_paths)
 
-    def get_bbox(self):
-        return ((0, 0, self.start_z), (self.width, self.height, self.end_z))
-
     def read_region(
         self,
         start,
@@ -65,22 +69,30 @@ class WBTReader:
         Read 3D region data
 
         Args:
-            start: (Z1, Y1, X1)
-            end:   (Z2, Y2, X2)
+            start: inclusive coordinates in self.axis_order
+            end: exclusive coordinates in self.axis_order
             mode: 'raster' or 'tiff'
             num_workers: 并行 worker 数
             parallel_backend: 'thread' or 'process'
+            padding: None, or 'right' to zero-fill beyond positive boundaries
         """
+        start, end = self._validate_coords(start, end, padding)
         z1, y1, x1 = start
         z2, y2, x2 = end
-        self._validate_coords(start, end, padding)
         d, h, w = z2 - z1, y2 - y1, x2 - x1
-        image = np.empty((d, h, w), dtype=self.dtype)
+        image = np.zeros((d, h, w), dtype=self.dtype)
 
         subz2, suby2, subx2 = min(z2, self.depth), min(y2, self.height), min(x2, self.width)
 
+        if mode not in ("raster", "tiff"):
+            raise ValueError(f"Unsupported mode: {mode}. Use 'raster' or 'tiff'")
+        if any(a >= b for a, b in zip(start, (subz2, suby2, subx2))):
+            list(read_parallel(self._rasterio_read_one, (), num_workers, parallel_backend))
+            return self._output_array(image)
+
+        image_sub = image[:subz2 - z1, :suby2 - y1, :subx2 - x1]
         if mode == "raster":
-            image_sub = self._read_with_rasterio_parallel(
+            self._read_with_rasterio_parallel(
                 z1,
                 subz2,
                 y1,
@@ -89,9 +101,10 @@ class WBTReader:
                 subx2,
                 num_workers=num_workers,
                 parallel_backend=parallel_backend,
+                out=image_sub,
             )
         elif mode == "tiff":
-            image_sub = self._read_with_tifffile_parallel(
+            self._read_with_tifffile_parallel(
                 z1,
                 subz2,
                 y1,
@@ -100,27 +113,9 @@ class WBTReader:
                 subx2,
                 num_workers=num_workers,
                 parallel_backend=parallel_backend,
+                out=image_sub,
             )
-        else:
-            raise ValueError(f"Unsupported mode: {mode}. Use 'raster' or 'tiff'")
-        image[:subz2, :suby2, :subx2] = image_sub
-        return image
-
-    def _validate_coords(self, start, end, padding=None):
-        z1, y1, x1 = start
-        z2, y2, x2 = end
-        if z1 < self.start_z or (z2 > self.depth and padding != "right") or z1 >= z2:
-            raise ValueError(
-                f"Invalid Z coordinates: ({z1}, {z2}), valid range: [0, {self.depth})"
-            )
-        if y1 < 0 or (y2 > self.height and padding != "right") or y1 >= y2:
-            raise ValueError(
-                f"Invalid Y coordinates: ({y1}, {y2}), valid range: [0, {self.height})"
-            )
-        if x1 < 0 or (x2 > self.width and padding != "right") or x1 >= x2:
-            raise ValueError(
-                f"Invalid X coordinates: ({x1}, {x2}), valid range: [0, {self.width})"
-            )
+        return self._output_array(image)
 
     # ------------------- rasterio 并行版 -------------------
     @staticmethod
@@ -133,21 +128,17 @@ class WBTReader:
         return i, arr
 
     def _read_with_rasterio_parallel(
-        self, z1, z2, y1, y2, x1, x2, num_workers=8, parallel_backend="thread"
+        self, z1, z2, y1, y2, x1, x2, num_workers=8, parallel_backend="thread", out=None
     ):
         d, h, w = z2 - z1, y2 - y1, x2 - x1
-        image = np.empty((d, h, w), dtype=self.dtype)
+        image = np.empty((d, h, w), dtype=self.dtype) if out is None else out
 
-        Executor = (
-            ThreadPoolExecutor if parallel_backend == "thread" else ProcessPoolExecutor
-        )
-        tasks = [
+        tasks = (
             (i, self.slice_paths[z], x1, y1, w, h) for i, z in enumerate(range(z1, z2))
-        ]
+        )
 
-        with Executor(max_workers=num_workers) as ex:
-            for i, arr in ex.map(WBTReader._rasterio_read_one, tasks, chunksize=1):
-                image[i] = arr
+        for i, arr in read_parallel(WBTReader._rasterio_read_one, tasks, num_workers, parallel_backend):
+            image[i] = arr
 
         return image
 
@@ -158,33 +149,26 @@ class WBTReader:
         i, path, y1, y2, x1, x2 = args
         with tifffile.TiffFile(path) as tif:
             full = tif.asarray()
-        return i, full[y1:y2, x1:x2]
+        return i, full[y1:y2, x1:x2].copy()
 
     def _read_with_tifffile_parallel(
-        self, z1, z2, y1, y2, x1, x2, num_workers=8, parallel_backend="thread"
+        self, z1, z2, y1, y2, x1, x2, num_workers=8, parallel_backend="thread", out=None
     ):
         d, h, w = z2 - z1, y2 - y1, x2 - x1
-        image = np.empty((d, h, w), dtype=self.dtype)
+        image = np.empty((d, h, w), dtype=self.dtype) if out is None else out
 
-        Executor = (
-            ThreadPoolExecutor if parallel_backend == "thread" else ProcessPoolExecutor
-        )
-        tasks = [
+        tasks = (
             (i, self.slice_paths[z], y1, y2, x1, x2)
             for i, z in enumerate(range(z1, z2))
-        ]
+        )
 
-        with Executor(max_workers=num_workers) as ex:
-            for i, arr in ex.map(WBTReader._tifffile_read_one, tasks, chunksize=1):
-                image[i] = arr
+        for i, arr in read_parallel(WBTReader._tifffile_read_one, tasks, num_workers, parallel_backend):
+            image[i] = arr
 
         return image
 
-    def get_dimensions(self):
-        return (self.depth, self.height, self.width)
-
     def __repr__(self):
-        return f"WBTReader(slices={self.depth}, size=({self.depth}, {self.height}, {self.width}))"
+        return f"WBTReader(slices={self.depth}, axis_order={self.axis_order!r}, size={self.shape})"
 
 
 # Usage example

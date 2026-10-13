@@ -77,7 +77,7 @@ swclib/
 ├── data/         # Core SWC data structures
 ├── image/        # SWC ↔ binary mask conversion
 ├── metrics/      # Reconstruction quality metrics
-├── whole_brain/  # Large-scale tiled TIFF I/O
+├── whole_brain/  # Whole-brain TIFF slice and FNT NRRD cube I/O
 ├── geometry/     # 3D geometric primitives
 └── utils/        # Shared helpers
 ```
@@ -261,6 +261,27 @@ summary = manager.collect(save_path="results.json")
 ```
 
 ### Whole-Brain Image Reader
+
+Use `WholeBrainReader` as a common entry point for FNT cubes and TIFF slices:
+
+```python
+from swclib.whole_brain import WholeBrainReader
+
+reader = WholeBrainReader("/data/brain/fnt/cubes", mode="fnt", channel="ch00")
+print(reader.get_dimensions())  # (Z, Y, X)
+block = reader.read_region(start=(100, 200, 300), end=(120, 240, 360))
+
+# For 2D TIFF slices:
+reader = WholeBrainReader(
+    "/data/brain/slices", mode="slice", slice_name_pattern=r"slice_(\d+)\.tif"
+)
+```
+
+`FNTReader` reads the catalog and only the NRRD cubes intersecting a requested
+region, including smaller edge cubes. Set `axis_order="XYZ"` on any reader to
+use XYZ for region coordinates, returned arrays and dimensions; the default is
+`"ZYX"`. Both values are case-insensitive. Bounding boxes always use XYZ
+coordinates, with exclusive upper bounds in both cases.
 
 Efficient parallel reader for large TIFF stacks. `WBTReader` recursively scans
 the slice directory and all subdirectories for files matching `slice_ext`

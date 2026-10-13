@@ -29,6 +29,7 @@ dependencies = [
   "rtree",
   "rasterio",
   "tifffile",
+  "pynrrd",
   "scikit-image",
   "opencv-python",
   "tqdm"
