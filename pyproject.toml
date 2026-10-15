@@ -40,5 +40,13 @@ Homepage = "https://yang-ze-kang.github.io/swclib/"
 Repository = "https://github.com/yang-ze-kang/swclib"
 Issues = "https://github.com/yang-ze-kang/swclib/issues"
 
+[project.scripts]
+swclib-viewer = "swclib.visualization.cli:main"
+
+[tool.setuptools.package-data]
+"swclib.visualization" = ["static/*", "*.md"]
+
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["swclib*"]
+exclude = ["swclib.visualization.tests*"]

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SWC Studio · 神经元可视化</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/" aria-label="SWC Studio 首页"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><path d="M7 25L15 15 9 6M15 15l11-6M15 15l10 11"/><circle cx="15" cy="15" r="4"/><circle cx="7" cy="25" r="2"/><circle cx="9" cy="6" r="2"/><circle cx="26" cy="9" r="2"/><circle cx="25" cy="26" r="2"/></svg><strong>SWC<span>STUDIO</span></strong></a>
+  <span class="project-label">神经元形态 · 图像工作台</span>
+  <div class="top-end"><span class="local-indicator" id="readonly-status">源数据只读</span><span class="version" id="version">v0.8.0</span></div>
+</header>
+<main>
+  <section class="viewport" aria-label="三维可视化视口">
+    <canvas id="scene" tabindex="0" aria-label="SWC 和图像三维视图：左键轨迹球自由旋转，Alt 加左键绕视线旋转，右键菜单定位，右键拖动平移，滚轮缩放"></canvas>
+    <div id="hemisphere-left" class="hemisphere-label left-side" hidden></div><div id="hemisphere-right" class="hemisphere-label right-side" hidden></div>
+    <div class="viewport-toolbar">
+      <div class="segmented" id="view-buttons" aria-label="视图方向"><button data-view="mip" class="active">3D</button><button data-view="xy">XY</button><button data-view="xz">XZ</button><button data-view="yz">YZ</button></div>
+      <button id="overall-center" class="icon-button" title="回到全部可见数据的整体中心，保持缩放与旋转">◎ <span>整体中心</span></button>
+      <button id="fit" class="icon-button" title="适应全部可见数据 (F)">⊡ <span>适应视图</span></button>
+    </div>
+    <div class="view-label"><span class="view-dot"></span><span id="view-name">三维 · 最大强度投影</span></div>
+    <div class="empty-state" id="empty-state"><div class="empty-art"><svg viewBox="0 0 160 130" aria-hidden="true"><path d="M80 92V60L52 42 35 20M52 42l-24 8M80 60l27-21 8-24M107 39l29 7M80 92l-20 20M80 92l27 22"/><circle cx="80" cy="92" r="7"/><circle cx="80" cy="60" r="4"/><circle cx="52" cy="42" r="4"/><circle cx="107" cy="39" r="4"/></svg></div><span class="eyebrow">EXPLORE EVERY BRANCH</span><h1>从一个神经元开始</h1><p>在右侧添加 SWC 或图像路径<br>在同一空间中检查形态与标注</p><div class="empty-tags"><span>完整节点</span><span>三维叠加</span><span>区域裁剪</span></div></div>
+    <div id="legend" class="legend"><span><i class="root"></i>根节点</span><span><i class="chain"></i>度数 2</span><span><i class="branch"></i>分叉</span><span><i class="leaf"></i>叶子</span></div>
+    <div class="navigation-hint">左键自由旋转 · Alt + 左键滚转 <b>·</b> 右键定位 / 平移 <b>·</b> 滚轮缩放</div>
+    <canvas id="orientation-axes" aria-label="随视角旋转的 XYZ 方向轴：X 红，Y 绿，Z 蓝"></canvas>
+    <div id="target-menu" class="target-menu" role="menu" aria-label="目标定位" hidden><div id="target-info" class="hint"></div><button id="go-to-target" role="menuitem">Go to target</button></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </section>
+  <aside class="sidebar" aria-label="数据与显示工具栏">
+    <div class="sidebar-title"><h2>工作空间</h2><span id="entry-count">0 个数据源</span></div>
+    <details class="camera-controls"><summary>视野中心 <span>XYZ</span></summary><form id="center-form"><label for="view-center">当前显示坐标（crop 后为局部坐标）</label><input id="view-center" value="0, 0, 0" required><div class="button-row"><button class="secondary" type="submit">移动到中心</button><button id="read-center" type="button" class="quiet">获取当前中心</button></div></form><div id="center-status" class="small-status">中心：0, 0, 0</div></details>
+    <div class="tabs" role="tablist"><button id="tab-swc" role="tab" aria-selected="true" aria-controls="panel-swc" class="active">神经元 <span>SWC</span></button><button id="tab-image" role="tab" aria-selected="false" aria-controls="panel-image">图像 <span>VOLUME</span></button><button id="tab-plugins" role="tab" aria-selected="false" aria-controls="panel-plugins">插件 <span>PLUGINS</span></button></div>
+    <div class="panel" id="panel-swc" role="tabpanel" aria-labelledby="tab-swc">
+      <section class="control-section"><div class="section-heading"><h3>添加神经元</h3><span class="step">01</span></div>
+        <form id="swc-form"><label for="swc-path">文件或文件夹路径</label><div class="input-action"><input id="swc-path" placeholder="/data/neurons/example.swc" required autocomplete="off"><button class="primary" type="submit">添加</button></div><label class="check"><input id="swc-recursive" type="checkbox">包含子文件夹</label></form>
+        <p class="hint">支持批量添加目录。路径位于运行服务的计算机上。</p><p id="swc-load-status" class="small-status" role="status">正在配置并行加载…</p>
+      </section>
+      <section class="control-section"><div class="section-heading"><h3>神经元列表 <span id="swc-count" class="badge">0</span></h3><div class="text-actions"><button id="show-all">全显</button><button id="hide-all">全隐</button></div></div><div class="list-actions"><label class="check"><input id="select-all-swc" type="checkbox">选择全部</label><button id="remove-selected-swc" class="text-button" disabled>移除所选 (0)</button></div><div id="swc-list" class="file-list"><div class="list-empty">还没有添加 SWC</div></div><p class="hint">移除只清理列表与显示缓存，源文件不变。</p></section>
+      <section class="control-section"><div class="section-heading"><h3>显示设置</h3><span class="step">02</span></div>
+        <label for="color-mode">颜色模式</label><select id="color-mode"><option value="0">节点拓扑 · 根 / 度数 / 叶子</option><option value="1">神经元 · 每个 SWC 一种颜色</option></select>
+        <div class="range-label"><label for="point-size">节点大小</label><output id="point-size-value">5 px</output></div><input id="point-size" type="range" min="1" max="20" value="5" step="0.5">
+        <div class="inline-checks"><label class="check"><input id="show-points" type="checkbox" checked>节点</label><label class="check"><input id="show-lines" type="checkbox" checked>连线</label></div>
+        <div class="range-label"><label for="swc-opacity">标注不透明度</label><output id="swc-opacity-value">100%</output></div><input id="swc-opacity" type="range" min="0.1" max="1" step="0.05" value="1">
+      </section>
+      <section class="control-section"><div class="section-heading"><h3>区域裁剪</h3><span class="coordinate-badge">XYZ</span></div><p class="hint">仅保留 [start, end) 内的节点，显示坐标减去 start。</p>
+        <form id="crop-form"><label for="crop-start">Start <span>包含</span></label><input id="crop-start" placeholder="0, 0, 0" value="0, 0, 0" required><label for="crop-end">End <span>不包含</span></label><input id="crop-end" placeholder="256, 256, 256" value="256, 256, 256" required><div class="button-row"><button type="submit" class="secondary">应用裁剪</button><button type="button" id="clear-crop" class="quiet">重置</button></div></form><div id="crop-status" class="small-status">未启用裁剪 · 全局坐标</div>
+      </section>
+    </div>
+    <div class="panel" id="panel-image" role="tabpanel" aria-labelledby="tab-image" hidden>
+      <section class="control-section"><div class="section-heading"><h3>添加小块图像</h3><span class="step">01</span></div><form id="image-form"><label for="image-path">文件或文件夹路径</label><div class="input-action"><input id="image-path" placeholder="/data/blocks/volume.tif" required autocomplete="off"><button class="primary" type="submit">添加</button></div><label class="check"><input id="image-recursive" type="checkbox">包含子文件夹</label></form><p class="hint">灰度 TIFF / NRRD / NPY · 每次只显示一幅图像，未选中时不读取像素。</p></section>
+      <section class="control-section"><details id="brain-details"><summary>从全脑数据读取区域 <span>FNT / TIFF</span></summary><form id="brain-form"><label for="brain-path">全脑数据目录</label><input id="brain-path" placeholder="/data/brain" required><label for="brain-mode">数据模式</label><select id="brain-mode"><option value="fnt">FNT · catalog + NRRD 分块</option><option value="slice">TIFF · 二维切片目录</option></select><div id="fnt-options"><label for="brain-channel">通道</label><input id="brain-channel" value="ch00"></div><div id="slice-options" hidden><label for="brain-pattern">文件名正则（一个 Z 索引捕获组）</label><input id="brain-pattern" value=".*?(\d+)\.tif"><label for="brain-extension">切片扩展名</label><input id="brain-extension" value=".tif"></div><button type="submit" class="secondary full-width">添加全脑数据源</button></form><label for="brain-source">已登记的全脑数据源</label><div class="input-action"><select id="brain-source"><option value="">请选择全脑数据源</option></select><button id="remove-brain" class="quiet" disabled>移除</button></div><div id="brain-info" class="hint">选择全脑数据源后设置区域。</div>        <div id="region-options" hidden><label for="brain-start">Crop start</label><input id="brain-start" value="0, 0, 0"><label for="brain-end">Crop end</label><input id="brain-end" value="128, 128, 128"><button id="use-swc-crop" class="text-button">使用 SWC crop 坐标</button><button id="load-region" class="primary full-width">添加并显示小块</button><p class="hint">只解码相交分块 / 切片窗口，超出限制的区域会在读取前拒绝。</p></div></details></section>
+      <section class="control-section"><div class="section-heading"><h3>图像列表 <span id="image-count" class="badge">0</span></h3><button id="hide-image" class="text-button">取消显示</button></div><div class="list-actions"><label class="check"><input id="select-all-image" type="checkbox">选择全部</label><button id="remove-selected-image" class="text-button" disabled>移除所选 (0)</button></div><div id="image-list" class="file-list"><div class="list-empty">还没有添加图像</div></div><p class="hint">移除只清理列表与显示缓存，源文件不变。</p></section>
+      <section id="volume-controls" class="control-section"><div class="section-heading"><h3>区域与定位</h3><span class="coordinate-badge">XYZ</span></div>
+        <div id="volume-info" class="hint">选择图像以查看尺寸和显示上限。</div>
+        <div id="block-options"><label for="image-origin">小块图像全局起点</label><input id="image-origin" value="0, 0, 0"><div class="button-row"><button id="apply-origin" class="quiet">更新位置</button><button id="align-origin" class="quiet">对齐 SWC crop</button></div></div>
+
+        <div id="memory-limit" class="memory-limit">正在估算显示容量…</div>
+      </section>
+      <section class="control-section"><div class="section-heading"><h3>图像显示</h3><span class="step">02</span></div>
+        <label for="render-mode">显示方式</label><select id="render-mode"><option value="mip">3D · 最大强度投影 (MIP)</option><option value="volume">3D · 体渲染</option><option value="xy">XY · 正交切片</option><option value="xz">XZ · 正交切片</option><option value="yz">YZ · 正交切片</option></select>
+        <div id="slice-control" hidden><div class="range-label"><label for="slice-index">切片位置</label><output id="slice-value">0</output></div><input id="slice-index" type="range" min="0" max="0" value="0"><label for="slab">SWC 切片半厚度（体素）</label><input id="slab" type="number" min="0.1" step="0.5" value="3"></div>
+        <div class="range-label"><label for="black">黑场</label><output id="black-value">0</output></div><input id="black" type="range" min="0" max="1" value="0" step="0.001">
+        <div class="range-label"><label for="white">白场</label><output id="white-value">1</output></div><input id="white" type="range" min="0" max="1" value="1" step="0.001">
+        <div class="range-label"><label for="brightness">亮度</label><output id="brightness-value">0.00</output></div><input id="brightness" type="range" min="-0.5" max="0.5" value="0" step="0.01">
+        <div class="range-label"><label for="gamma">Gamma</label><output id="gamma-value">1.00</output></div><input id="gamma" type="range" min="0.2" max="3" value="1" step="0.05">
+        <div class="range-label"><label for="image-opacity">图像不透明度</label><output id="image-opacity-value">100%</output></div><input id="image-opacity" type="range" min="0" max="1" value="1" step="0.05">
+        <div class="button-row"><button id="auto-window" class="secondary">自动对比度</button><button id="reset-window" class="quiet">重置</button></div>
+      </section>
+    </div>
+    <div class="panel" id="panel-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden><section class="control-section"><div class="section-heading"><h3>插件列表</h3><span class="step">TOOLS</span></div><div id="plugin-list"></div></section></div>
+    <div class="sidebar-footer"><span class="gpu-dot"></span>WebGL 2 <span>·</span> 原始拓扑，无节点抽样</div>
+  </aside>
+</main>
+<footer class="statusbar"><div><span class="status-dot"></span><span id="status-text">就绪</span></div><div class="scene-stats"><span id="node-stats">0 个节点</span><span id="draw-stats">0 次绘制</span><span id="coordinate-status">XYZ · 全局坐标</span></div></footer>
+<script type="module" src="/app.js"></script>
+</body></html>

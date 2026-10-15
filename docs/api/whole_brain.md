@@ -131,18 +131,47 @@ Returns: `ndarray` with axes in `axis_order` and shape equal to `end - start`.
 
 ## `swclib.whole_brain.swc_reader.SwcReader`
 
-Minimal SWC reader for large whole-brain coordinate files.
+SWC reader for a whole-brain coordinate file or a directory containing one
+SWC per neuron. Coordinates always use XYZ order.
 
 ### Constructor
 
 ```python
-SwcReader(path, rescale=(1.0, 1.0, 1.0))
+SwcReader(path, rescale=(1.0, 1.0, 1.0), *, recursive=False)
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `path` | `str` | SWC file path |
+| `path` | `str` or `Path` | SWC file or directory path |
 | `rescale` | `tuple[float, float, float]` | Coordinate scale applied while loading `(sx, sy, sz)` |
+| `recursive` | `bool` | Search subdirectories when `True`; default `False` |
+
+A single file is loaded immediately, preserving its original node IDs. For a
+directory, construction scans all SWC files in bounded chunks and retains only
+their paths, node counts and scaled bounding boxes. It does not retain all node
+coordinates. Both `.swc` and `.SWC` extensions are accepted. `swc_paths` lists
+the selected paths in sorted order; nodes within each file retain source-row
+order. Empty directories and empty files are supported.
+
+Keep source files unchanged while using the reader. Recreate the reader after
+adding, removing or editing files so that its spatial index and row counts stay
+current. The initial scan reads every file; subsequent spatial queries load
+only candidate neurons and release their arrays after use. No persistent index
+or neuron cache is written.
+
+### Node-array attributes
+
+`ids`, `types`, `xs`, `ys`, `zs`, `rs`, `parents` and `id2idx` remain available.
+For directory input, explicitly accessing any of these attributes loads and
+caches **all** node arrays in the order described above. Directory IDs are
+reindexed to `1..N`; parents are remapped within each neuron, and missing
+parents become `-1`. This prevents connections between files with duplicate
+node IDs. Subsequent queries use the cached arrays, including in-memory edits.
+
+For large directories, use the query methods without accessing these attributes
+to retain lazy loading. `read_region` needs memory for one full candidate
+neuron at a time plus the cropped output; `query_cube_mask` additionally needs
+one boolean per node in the entire directory.
 
 ### Methods
 
@@ -161,3 +190,30 @@ the region become roots.
 
 Returns: `Swc` object containing the cropped region. Empty regions return an
 empty `Swc`.
+
+For directory input, first filter neurons by bounding-box intersection, then
+read and crop each candidate separately and merge the cropped results. Parent
+links are preserved within each neuron, even when different files reuse IDs.
+Only nodes inside the region are returned; crossing edges do not introduce
+additional nodes.
+
+#### `query_cube_mask(cube) → ndarray[bool]`
+
+`cube` is `(xmin, ymin, zmin, xmax, ymax, zmax)`, with inclusive lower and
+exclusive upper bounds. Returns a flat boolean array covering **all** nodes,
+aligned with `xs`, `ys` and the other attributes. In lazy directory mode, only
+candidate files are loaded; skipped files contribute `False` entries. The call
+does not materialize the global coordinate arrays.
+
+#### `check_cube_nonempty(cube) → bool`
+
+Return whether any node lies inside the cube. In lazy directory mode, check
+candidate neurons until the first actual hit, without allocating a global
+mask. Bounding-box overlap alone does not imply a nonempty region.
+
+#### `add_offset(offset)`
+
+Translate XYZ coordinates by `(dx, dy, dz)` after scaling. In lazy directory
+mode, update the bounding boxes and apply the offsets when loading each neuron.
+This operation does not load node arrays. Radius values are unchanged by both
+`rescale` and `add_offset`.

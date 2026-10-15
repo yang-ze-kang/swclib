@@ -189,7 +189,7 @@ converter.run(block, "local_neuron.swc")
 
 ---
 
-## `SwcReader` — SWC file loading for whole-brain coordinates
+## `SwcReader` — SWC files and neuron directories
 
 For whole-brain SWC files with large coordinate values, use `SwcReader` from the same module:
 
@@ -204,3 +204,30 @@ swc = reader.read_region(
 )
 # returns a swclib.data.swc.Swc object in local coordinates
 ```
+
+For a directory containing one SWC per neuron, use the same interface:
+
+```python
+reader = SwcReader("neurons/", rescale=(0.5, 0.5, 1.0), recursive=False)
+reader.add_offset((100, 200, 0))
+
+start, end = (1000, 2000, 300), (1500, 2500, 400)
+if reader.check_cube_nonempty((*start, *end)):
+    swc = reader.read_region(start, end, out_path="local_neurons.swc")
+```
+
+Initialization scans the files once to record node counts and bounding boxes,
+using bounded memory. Region queries load candidate neurons one at a time,
+crop their nodes, and merge the results with unique IDs and independent parent
+links. Set `recursive=True` to include SWC files in subdirectories. Recreate the
+reader if the source files change.
+
+`query_cube_mask((*start, *end))` returns one flat boolean array for all nodes:
+files are sorted by path, then nodes follow their source-row order. It allocates
+the full boolean mask but reads coordinates only from candidate neurons.
+`check_cube_nonempty` avoids that global mask and stops at the first node hit.
+
+The existing `reader.xs`, `reader.ys`, `reader.ids`, and related attributes are
+also available. Accessing any of them explicitly loads and caches all directory
+node arrays, so reserve this for datasets that fit in memory. The arrays align
+with `query_cube_mask`; directory IDs and parents are remapped consistently.
