@@ -930,6 +930,7 @@ class Swc(object):
         round_ndigits: int = None,
         reindex: bool = False,
         in_place: bool = True,
+        only_adjacent: bool = False,
     ):
         """
         Remove duplicate nodes that share the same position.
@@ -946,6 +947,11 @@ class Swc(object):
             Whether to reassign node ids to 1..N after deduplication.
         in_place : bool
             Whether to modify self in place.
+        only_adjacent : bool
+            Contract equal-position parent/child edges only. Preserve coincident
+            nodes on distinct branches, and retain each contracted chain's
+            ancestor independently of node insertion order. Default False
+            retains the historical global position-based behavior.
 
         Returns
         -------
@@ -982,6 +988,28 @@ class Swc(object):
                 key_to_keep_id[key] = nid
                 kept_ids.append(nid)
             old_id_to_keep_id[nid] = key_to_keep_id[key]
+
+        if only_adjacent:
+            # A coordinate is not a topological identity: two crossing fibers
+            # must not be joined merely because their samples coincide.
+            old_id_to_keep_id = {}
+            keys = {nid: _make_key(node) for nid, node in self.nodes.items()}
+            for nid in self.nodes:
+                path, seen, current = [], set(), nid
+                while current not in old_id_to_keep_id:
+                    if current in seen:
+                        raise ValueError("Cycle in equal-position parent chain")
+                    seen.add(current)
+                    path.append(current)
+                    parent = int(self.nodes[current]["parent"])
+                    if parent not in self.nodes or keys[parent] != keys[current]:
+                        old_id_to_keep_id[current] = current
+                        break
+                    current = parent
+                representative = old_id_to_keep_id[current]
+                for current in path:
+                    old_id_to_keep_id[current] = representative
+            kept_ids = [nid for nid in self.nodes if old_id_to_keep_id[nid] == nid]
 
         # Rebuild kept nodes and redirect parent pointers
         new_nodes = {}
