@@ -153,6 +153,9 @@ FiberMetric(
     use_category=False,
     min_fiber_length=5.0,
     eps=1e-6,
+    query_workers=16,
+    parallel_min_points=65536,
+    batch_point_limit=16777216,
 )
 ```
 
@@ -170,6 +173,9 @@ FiberMetric(
 | `use_category` | `bool` | `False` | Report axon / dendrite stats separately |
 | `min_fiber_length` | `float` | `5.0` | Ignore fibers shorter than this (µm) |
 | `eps` | `float` | `1e-6` | Numerical guard for length-ratio checks |
+| `query_workers` | `int` | `16` | Maximum query threads for sufficiently large chunks; `1` forces single-thread queries, `-1` uses all CPU threads |
+| `parallel_min_points` | `int` | `65536` | Minimum points **in each query chunk** to enable `query_workers`; smaller chunks use one thread. `0` disables this size gate |
+| `batch_point_limit` | `int` | `16777216` | Maximum total sampled segments grouped for shared-midpoint deduplication; a single longer fiber stays intact |
 
 ### `run(gold, pred, skip_center_dist=100, return_fibers=False, verbose=False) → dict`
 
@@ -177,9 +183,37 @@ FiberMetric(
 |-----------|------|-------------|
 | `gold` | `str` | Gold standard SWC path |
 | `pred` | `str` | Predicted SWC path |
-| `skip_center_dist` | `float` | Skip pairs whose soma centers are farther than this |
+| `skip_center_dist` | `float` | Skip pairs whose fiber coordinate means are farther than this; `float("inf")` disables this filter |
 | `return_fibers` | `bool` | Include `SwcFiber` objects in result |
 | `verbose` | `bool` | Print matching progress |
+
+Distance queries reuse identical sample midpoints across fibers and use a
+bounded search while retaining the inclusive `distance <= dist_threshold`
+test. Geometry preparation is local to each evaluation, after alignment and
+scaling. Batching preserves each fiber's original summation order, sampling,
+filter scores, and full maximum-total-IoU assignment; low-IoU pairs are not
+discarded merely because they fall below `iou_threshold`.
+
+The three performance options are keyword-only and do not change sampling,
+IoU values, or the matching objective. Resampling is vectorized for float64
+coordinates. Small queries stay single-threaded to avoid thread startup costs;
+the 65,536-point default is a conservative crossover measured on neuron-12.
+Query buffers are separately limited to 262,144 points, with the thread gate
+applied to each chunk, including its last partial chunk.
+
+Larger deduplication batches reuse more shared root-to-leaf geometry but use
+more memory. `batch_point_limit` counts sampled segments, not bytes, and does
+not limit the complete run's memory usage: sample caches and the IoU matrix
+also occupy memory. The 16,777,216-point setting used about 3.2 GiB peak RSS on
+the approximately 135,000-node neuron-12 case. To reproduce the earlier batch
+budget, set `batch_point_limit=262144`. When evaluating several neurons in
+parallel processes, set `query_workers=1` or divide the available CPU threads
+among those processes. For example:
+
+```python
+metric = FiberMetric(query_workers=1, batch_point_limit=262144)
+scores = metric.run(gold_path, pred_path, skip_center_dist=float("inf"))
+```
 
 **Returns:**
 

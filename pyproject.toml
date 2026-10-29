@@ -24,7 +24,7 @@ dependencies = [
   "numpy",
   "anytree",
   "miniball",
-  "scipy",
+  "scipy>=1.6",
   "networkx",
   "rtree",
   "rasterio",

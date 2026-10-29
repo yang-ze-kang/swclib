@@ -4,6 +4,8 @@ from typing import Sequence, Tuple
 import numpy as np
 from scipy.spatial import cKDTree
 
+from swclib.data.euclidean_point import EuclideanPoint3D
+
 
 @dataclass(frozen=True)
 class LocalBendResult:
@@ -255,6 +257,18 @@ def resample_nodes_by_distance(nodes, distance=2, eps=1e-8):
 
     target_lens = np.arange(0, total_len, distance)
 
+    if nodes.dtype == np.float64 and nodes.ndim == 2 and len(target_lens) > 1:
+        # Keep the scalar implementation's search side and arithmetic order.
+        # Other dtypes retain its NumPy-version-dependent scalar promotion.
+        previous = np.searchsorted(cum_len, target_lens[1:]) - 1
+        ratio = (target_lens[1:] - cum_len[previous]) / seg_lens[previous]
+        new_nodes = np.empty((len(target_lens), nodes.shape[1]), dtype=nodes.dtype)
+        new_nodes[0] = nodes[0]
+        new_nodes[1:] = nodes[previous] + ratio[:, None] * diffs[previous]
+        if np.linalg.norm(new_nodes[-1] - nodes[-1]) > eps:
+            new_nodes = np.concatenate([new_nodes, nodes[-1:]], axis=0)
+        return new_nodes
+
     new_nodes = []
     for t in target_lens:
         idx = np.searchsorted(cum_len, t)
@@ -294,18 +308,29 @@ class SwcFiber:
         return len(self.nodes)
 
     def __eq__(self, fiber):
-        if self.nodes == fiber.nodes:
+        if len(self.nodes) != len(fiber.nodes):
+            return False
+        if not self.nodes:
             return True
-        elif self.nodes[::-1] == fiber.nodes:
+        # Distinct root-to-leaf paths usually differ at an endpoint. Reject
+        # them before scanning or making a reversed copy of the whole path.
+        endpoints = (self.nodes[0], self.nodes[-1])
+        other_endpoints = (fiber.nodes[0], fiber.nodes[-1])
+        if endpoints == other_endpoints and self.nodes == fiber.nodes:
             return True
-        return False
+        return endpoints == other_endpoints[::-1] and self.nodes[::-1] == fiber.nodes
 
     def __getitem__(self, idx):
         return self.nodes[idx]
 
     @property
     def coords(self):
-        return np.array([node.coord for node in self.nodes])
+        # Avoid NumPy discovering the sequence protocol for every point.
+        # Still copy the values on each call: forest geometry is mutable.
+        return np.array([
+            node.coord._pos if type(node.coord) is EuclideanPoint3D else node.coord
+            for node in self.nodes
+        ])
 
     @property
     def length(self, update=True):

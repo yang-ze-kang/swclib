@@ -1,11 +1,10 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from pathlib import Path
-from tqdm import tqdm
 
 from swclib.data.swc import Swc
 from swclib.data.swc_forest import SwcForest
-from swclib.utils.points import point_pair_distance
+from swclib.metrics._fiber_matching import _fiber_iou_matrix, _load_resampled_forest
 
 
 class FiberMetric:
@@ -24,7 +23,25 @@ class FiberMetric:
         use_category=False,
         min_fiber_length=5.0,
         eps=1e-6,
+        *,
+        query_workers=16,
+        parallel_min_points=65536,
+        batch_point_limit=16777216,
     ):
+        for name, value in (
+            ("query_workers", query_workers),
+            ("parallel_min_points", parallel_min_points),
+            ("batch_point_limit", batch_point_limit),
+        ):
+            if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+                raise ValueError(f"{name} must be an integer")
+        if query_workers != -1 and query_workers < 1:
+            raise ValueError("query_workers must be -1 or a positive integer")
+        if parallel_min_points < 0:
+            raise ValueError("parallel_min_points must be nonnegative")
+        if batch_point_limit < 1:
+            raise ValueError("batch_point_limit must be positive")
+
         self.iou_threshold = iou_threshold
         self.dist_threshold = dist_threshold
         self.dist_sample = dist_sample
@@ -37,18 +54,25 @@ class FiberMetric:
         self.use_category = use_category
         self.min_fiber_length = min_fiber_length
         self.eps = eps
+        self.query_workers = int(query_workers)
+        self.parallel_min_points = int(parallel_min_points)
+        self.batch_point_limit = int(batch_point_limit)
 
     def run(self, gold, pred, skip_center_dist=100, return_fibers=False, verbose=False):
         if isinstance(gold, str) or isinstance(gold, Path):
             if self.resample_step!=None:
                 gold = Swc(gold)
                 gold.resample(self.resample_step)
-            gold = SwcForest(gold)
+                gold = _load_resampled_forest(gold)
+            else:
+                gold = SwcForest(gold)
         if isinstance(pred, str) or isinstance(pred, Path):
             if self.resample_step!=None:
                 pred = Swc(pred)
                 pred.resample(self.resample_step)
-            pred = SwcForest(pred)
+                pred = _load_resampled_forest(pred)
+            else:
+                pred = SwcForest(pred)
         assert isinstance(pred, SwcForest)
         assert isinstance(gold, SwcForest)
 
@@ -110,34 +134,9 @@ class FiberMetric:
         
         pred_fibers = pred.get_fibers(self.only_from_soma, min_length=self.min_fiber_length)
         Np = len(pred_fibers)
-        fiber_length_gt = [f.length for f in gold_fibers]
-        fiber_length_pred = [f.length for f in pred_fibers]
-        ious = np.zeros((Ng, Np))
-        for i in tqdm(range(Ng), desc="Calculating fiber IoUs", disable=not verbose):
-            for j in range(Np):
-                if (
-                    fiber_length_gt[i] / (fiber_length_pred[j] + self.eps) < min(0.5, self.iou_threshold)
-                    or fiber_length_pred[j] / (fiber_length_gt[i] + self.eps) < min(0.5, self.iou_threshold)
-                ): # early stop by max length
-                    ious[i, j] = min(fiber_length_gt[i], fiber_length_pred[j]) / max(fiber_length_gt[i], fiber_length_pred[j])
-                    continue
-                if self.with_direction: # early stop by endpoints distance
-                    max_length = max(fiber_length_gt[i], fiber_length_pred[j])
-                    if gold_fibers[i][0].distance(pred_fibers[j][0]) > 0.5 * max_length or \
-                        gold_fibers[i][-1].distance(pred_fibers[j][-1]) > 0.5 * max_length:
-                        ious[i, j] = 0.01
-                        continue
-                if (
-                    point_pair_distance(gold_fibers[i].center, pred_fibers[j].center)
-                    > skip_center_dist
-                ):  # early stop by center distance
-                    ious[i, j] = 0.01
-                    continue
-                ious[i, j] = gold_fibers[i].cal_iou(
-                    pred_fibers[j],
-                    dist_sample=self.dist_sample,
-                    dist_threshold=self.dist_threshold,
-                )
+        ious = _fiber_iou_matrix(
+            gold_fibers, pred_fibers, self, skip_center_dist, verbose
+        )
         cost = 1 - ious
         row_ind, col_ind = linear_sum_assignment(cost)
         matches,ious_matched = [], []
