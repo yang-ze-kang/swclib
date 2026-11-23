@@ -78,15 +78,19 @@ function visibleNeurons() {return swcs.filter(e=>e.visible&&e.loadedRevision===r
 function updateStats() {
   if(pendingPick&&pendingPick.serial!==renderer.stateSerial)closeTargetMenu();
   const count=swcs.reduce((n,e)=>n+(e.visible&&e.loadedRevision===revision?e.count||0:0),0);
-  $('node-stats').textContent=count.toLocaleString()+' 个节点';
+  $('node-stats').textContent=renderer.errors?.active?(renderer.errors.pair.pred.nodes.length+' 个预测节点 / '+renderer.errors.pair.gt.nodes.length+' 个 GT 节点'):renderer.replay?.active?(renderer.replay.data?.traced_edges_xyz.length||0).toLocaleString()+' 条已追踪线段':count.toLocaleString()+' 个节点';
+  $('legend').hidden=!!renderer.replay?.active||!!renderer.errors?.active||renderer.settings.colorMode===1;
   $('draw-stats').textContent=renderer.drawCalls+' 次绘制';
-  $('empty-state').hidden=count>0||!!renderer.volume;
+  $('empty-state').hidden=count>0||!!renderer.volume||!!renderer.replay?.active||!!renderer.errors?.active;
   $('center-status').textContent='中心：'+renderer.center.map(v=>Number(v.toFixed(3))).join(', ');
   const signature=JSON.stringify(visibleNeurons());
   if(signature!==visibleNeuronSignature){visibleNeuronSignature=signature;for(const notify of visibleNeuronListeners)notify();}
 }
-function visibleBounds() {return swcs.filter(e=>e.visible&&e.loadedRevision===revision).map(e=>e.bounds);}
-function fit() {renderer.fit(visibleBounds());}
+function visibleBounds() {if(renderer.errors?.active)return [renderer.errors.bounds.map(point=>point.map((v,i)=>v-renderer.cropStart[i]))];if(renderer.replay?.active&&renderer.replay.bounds)return [renderer.replay.bounds.map(point=>point.map((v,i)=>v-renderer.cropStart[i]))];return swcs.filter(e=>e.visible&&e.loadedRevision===revision).map(e=>e.bounds);}
+function fit() {
+  if(renderer.replay?.active&&renderer.replay.data){const frame=renderer.replay.data;renderer.span=Math.max(...(frame.prediction?.window_shape_xyz||[64,64,64]))*1.1;renderer.setCenter(frame.seed_xyz.map((v,i)=>v-renderer.cropStart[i]));}
+  else renderer.fit(visibleBounds());
+}
 function closeTargetMenu() {pickSequence++;pendingPick=null;$('target-menu').hidden=true;}
 function positionTargetMenu(x,y) {
   const menu=$('target-menu'),rect=$('scene').getBoundingClientRect();
@@ -329,6 +333,32 @@ async function showSoma({swc,brain,region,center},valid) {
   $('status-text').textContent='查看胞体 · '+swc.name;
   return true;
 }
+let replayImageKey=null,replayBrain=null;
+async function showReplayFrame(frame,options,valid) {
+  if(options.enabled) {
+    if(!options.path)throw new Error('请填写全脑图像目录');
+    const identity=JSON.stringify([options.path,options.mode,options.channel]);
+    if(replayBrain?.identity!==identity) {
+      const result=await api('add',{kind:'brain',path:options.path,options:{mode:options.mode,channel:options.channel}});
+      if(!valid())return;
+      const entry=result.entries[0];
+      const info=await read('info',{id:entry.id,kind:'brain',client:renderer.capabilities()},false,valid);
+      if(!valid())return;replayBrain={identity,entry,info};
+    }
+    const length=options.length,[lo,hi]=replayBrain.info.bounds;
+    if(!Number.isInteger(length)||length<1||length>300||lo.some((v,i)=>hi[i]-v<length))throw new Error('图像视野边长需要为 1–300 的整数，且不超过数据尺寸');
+    if(frame.seed_xyz.some((v,i)=>v<lo[i]||v>=hi[i]))throw new Error('seed 超出图像范围，请检查图像目录及坐标');
+    const start=frame.seed_xyz.map((v,i)=>Math.max(lo[i],Math.min(hi[i]-length,Math.floor(v-length/2)))),end=start.map(v=>v+length);
+    const key=JSON.stringify([identity,start,end]);
+    if(key!==replayImageKey) {
+      const buffer=await read('volume',{id:replayBrain.entry.id,kind:'brain',start,end,client:renderer.capabilities()},true,valid);
+      if(!valid())return;const decoded=unpack(buffer);renderer.setVolume(decoded.meta,new Float32Array(buffer,decoded.offset));setWindow(...decoded.meta.window);replayImageKey=key;
+    }
+  } else {renderer.clearVolume();replayImageKey=null;}
+  if(!valid())return;
+  renderer.replay.frame(frame);renderer.setCenter(frame.seed_xyz.map((v,i)=>v-renderer.cropStart[i]));syncSlice();
+  $('view-center').value=renderer.center.map(v=>Number(v.toFixed(3))).join(', ');
+}
 function handlers() {
   renderer.onTargetMenu=showTargetMenu;renderer.onNavigate=closeTargetMenu;
   document.addEventListener('pointerdown',event=>{if(!$('target-menu').contains(event.target))closeTargetMenu();});
@@ -411,6 +441,21 @@ async function start() {
     swcConcurrency=Math.max(1,Math.min(8,config.swc_workers||1));swcProgress();
     $('version').textContent='v'+config.version;limitsText(config.limits);handlers();
     mountPlugins($('plugin-list'),{
+      detectErrors:(body,valid)=>retryRead('errors/detect',body,false,valid),
+      beginErrors:pair=>{cancelSomaView();hideImage();renderer.clearVolume();renderer.startErrors(pair);},
+      selectError:event=>renderer.errors?.select(event),
+      focusError:(event,length)=>{renderer.span=length/2;renderer.setCenter(event.start.xyz.map((v,i)=>v-renderer.cropStart[i]));},
+      fitErrors:whole=>{const layer=renderer.errors;if(layer?.active){const box=whole?layer.bounds:layer.eventBounds;if(box)renderer.fit([box.map(point=>point.map((v,i)=>v-renderer.cropStart[i]))]);}},
+      fitErrorReview:()=>{const layer=renderer.errors;if(layer?.active&&layer.reviewBounds)renderer.fit([layer.reviewBounds.map(point=>point.map((v,i)=>v-renderer.cropStart[i]))]);},
+      setErrorDirections:enabled=>renderer.errors?.setDirections(enabled),
+      stopErrors:()=>renderer.errors?.stop(),
+      errorsActive:()=>!!renderer.errors?.active,
+      replayActive:()=>!!renderer.replay?.active,
+      openReplay:body=>api('replay/open',body),replayFrame:body=>api('replay/frame',body),
+      beginReplay:(info,frame)=>{cancelSomaView();hideImage();replayImageKey=null;renderer.startReplay(info.gt_edges_xyz,frame.seed_xyz);renderer.span=Math.max(...(frame.prediction?.window_shape_xyz||[64,64,64]))*1.1;},
+      showReplayFrame,
+      setReplayDirections:enabled=>renderer.replay?.setDirections(enabled),
+      stopReplay:()=>{renderer.replay?.stop();renderer.clearVolume();replayImageKey=null;},
       concurrency:swcConcurrency,cancelView:cancelSomaView,showSoma,
       setPlane:plane=>{renderer.hemispherePlane=plane;renderer.invalidate();},
       planeBounds:()=>renderer.sceneBounds(visibleBounds())?.map(point=>point.map((v,i)=>v+renderer.cropStart[i])),

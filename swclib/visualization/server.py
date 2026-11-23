@@ -15,6 +15,8 @@ from .readonly import ReadOnlyGuard
 from .exporting import ExportExistsError, ExportWriter
 from .hemisphere import DESCRIPTION, hemisphere_counts, plane_parameters
 from .plane_optimization import optimize_plane
+from .trace_replay import ReplayService
+from .error_detection import detect_pair
 
 STATIC = Path(__file__).with_name("static")
 
@@ -24,6 +26,8 @@ class ViewerServer(ThreadingHTTPServer):
 
     def __init__(self, address, volume_mib, swc_workers=None):
         self.catalog = Catalog()
+        self.replay = ReplayService()
+        self.error_detection_lock = threading.Lock()
         self.limits = Limits(volume_mib)
         self.token = secrets.token_urlsafe(32)
         self.read_lock = threading.Lock()
@@ -103,6 +107,11 @@ class ViewerHandler(BaseHTTPRequestHandler):
                      "/renderer.js": ("renderer.js", "text/javascript; charset=utf-8"),
                      "/geometry-worker.js": ("geometry-worker.js", "text/javascript; charset=utf-8"),
                      "/plugins.js": ("plugins.js", "text/javascript; charset=utf-8"),
+                     "/error-detection.js": ("error-detection.js", "text/javascript; charset=utf-8"),
+                     "/error-renderer.js": ("error-renderer.js", "text/javascript; charset=utf-8"),
+                     "/plugin-navigation.js": ("plugin-navigation.js", "text/javascript; charset=utf-8"),
+                     "/trace-replay.js": ("trace-replay.js", "text/javascript; charset=utf-8"),
+                     "/trace-renderer.js": ("trace-renderer.js", "text/javascript; charset=utf-8"),
                      "/hemisphere.js": ("hemisphere.js", "text/javascript; charset=utf-8"),
                      "/style.css": ("style.css", "text/css; charset=utf-8")}
         if path not in resources:
@@ -130,6 +139,9 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 raise ValueError("请求必须为 JSON 对象")
             path = urlsplit(self.path).path
             fields = {
+                "/api/errors/detect": {"pred_path", "trace_path", "gt_path", "distance_tolerance", "min_error_length", "sample_step", "coverage_threshold", "short_length", "other_gts", "fiber_metric_options", "max_fiber_pairs"},
+                "/api/replay/open": {"path", "gt_path"},
+                "/api/replay/frame": {"id", "index"},
                 "/api/add": {"path", "kind", "recursive", "options"},
                 "/api/remove": {"ids"},
                 "/api/swc": {"id", "crop"},
@@ -146,6 +158,21 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 return
             if set(request) - fields[path]:
                 raise ValueError("不支持的请求参数；源数据只读，导出仅支持结果 JSON")
+            if path == "/api/errors/detect":
+                if not self.server.error_detection_lock.acquire(blocking=False):
+                    self.json({"error": "另一个错误检测正在进行，请稍后重试"}, 409)
+                    return
+                try:
+                    self.json(detect_pair(**request))
+                finally:
+                    self.server.error_detection_lock.release()
+                return
+            if path == "/api/replay/open":
+                self.json(self.server.replay.open(request["path"], request.get("gt_path")))
+                return
+            if path == "/api/replay/frame":
+                self.json(self.server.replay.frame(request["id"], request["index"]))
+                return
             if path in ("/api/hemisphere/export", "/api/hemisphere/count", "/api/hemisphere/optimize"):
                 exporting = path.endswith("/export")
                 if "path" in request and "directory" in request:

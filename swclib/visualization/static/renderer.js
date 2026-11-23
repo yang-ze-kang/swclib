@@ -1,3 +1,5 @@
+import {TraceRenderer} from './trace-renderer.js';
+import {ErrorRenderer} from './error-renderer.js';
 const swcVertex = `#version 300 es
 precision highp float;
 layout(location=0) in vec3 position;
@@ -243,6 +245,8 @@ export class Renderer {
   capabilities() {
     return {max_texture_size:this.gl.getParameter(this.gl.MAX_3D_TEXTURE_SIZE),volume_mib:128};
   }
+  startReplay(gt,origin) {this.errors?.stop();if(!this.replay)this.replay=new TraceRenderer(this);this.replay.start(gt,origin);}
+  startErrors(pair) {this.replay?.stop();if(!this.errors)this.errors=new ErrorRenderer(this);this.errors.open(pair);}
   basis() {
     if(this.orientation==='xy') return [[1,0,0],[0,1,0],[0,0,1]];
     if(this.orientation==='xz') return [[1,0,0],[0,0,1],[0,-1,0]];
@@ -484,7 +488,7 @@ export class Renderer {
       gl.drawArrays(gl.TRIANGLES,0,3);this.drawCalls++;
     }
     this.drawHemisphere();
-    if(this.count) {
+    if(this.count&&!this.replay?.active&&!this.errors?.active) {
       const p=this.swcProgram,u=p.uniforms;this.common(p);gl.bindVertexArray(this.vao);
       gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.palette);gl.uniform1i(u.palette,0);gl.uniform1i(u.paletteWidth,this.paletteWidth);
       gl.uniform1i(u.colorMode,s.colorMode);gl.uniform1f(u.pointSize,s.pointSize*dpr);
@@ -495,6 +499,8 @@ export class Renderer {
       if(s.points) {gl.uniform1i(u.points,1);gl.drawArrays(gl.POINTS,0,this.count);this.drawCalls++;}
       gl.bindVertexArray(null);
     }
+    this.replay?.draw();
+    this.errors?.draw();
     this.drawAxes();
     this.lastFrameMs=performance.now()-begin;
     this.changed?.();

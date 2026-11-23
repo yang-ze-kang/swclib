@@ -45,8 +45,9 @@ swclib-viewer = "swclib.visualization.cli:main"
 
 [tool.setuptools.package-data]
 "swclib.visualization" = ["static/*", "*.md"]
+"swclib.error_detection" = ["*.md"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["swclib*"]
-exclude = ["swclib.visualization.tests*"]
+exclude = ["swclib.visualization.tests*", "swclib.error_detection.tests*"]

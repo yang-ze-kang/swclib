@@ -241,3 +241,21 @@ def test_optimize_http_constraints_cache_and_cleanup(service, tmp_path):
     assert not server.export_lock.locked()
     (tmp_path/'0.swc').write_text('1 3 -1 0 0 1 -1\n')
     assert request('/api/hemisphere/optimize', args)[0] == 200
+
+
+def test_replay_http_is_readonly_and_rejects_extra_fields(service,tmp_path):
+    from swclib.visualization.tests.test_trace_replay import fixture
+    _,_,request,url=service
+    source=fixture(tmp_path)
+    before=source.read_bytes(),source.stat().st_mtime_ns
+    status,body=request('/api/replay/open',{'path':str(tmp_path)})
+    assert status==200,body
+    info=json.loads(body)
+    assert info['frame_count']==2 and info['prediction_count']==2
+    status,body=request('/api/replay/frame',{'id':info['id'],'index':1})
+    assert status==200 and json.loads(body)['phase']=='prediction'
+    assert request('/api/replay/frame',{'id':info['id'],'index':-1})[0]==400
+    assert request('/api/replay/open',{'path':str(tmp_path),'out_path':str(source)})[0]==400
+    assert before==(source.read_bytes(),source.stat().st_mtime_ns)
+    for name in ['trace-replay.js','trace-renderer.js']:
+        assert urllib.request.urlopen(url+'/'+name).status==200

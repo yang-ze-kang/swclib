@@ -1,13 +1,20 @@
 // Built-in plugins receive a small viewer bridge; source data stays read-only.
 import {mountHemisphere} from './hemisphere.js';
-const plugins=[{id:'soma',name:'查看胞体',mount:mountSoma},{id:'hemisphere',name:'划分脑区',mount:mountHemisphere}];
+import {mountTraceReplay} from './trace-replay.js';
+import {mountErrorDetection} from './error-detection.js';
+import {createPluginNavigation} from './plugin-navigation.js';
+const plugins=[{id:'errors',name:'追踪错误检测',mount:mountErrorDetection},{id:'trace',name:'追踪逐步回放',mount:mountTraceReplay},{id:'soma',name:'查看胞体',mount:mountSoma},{id:'hemisphere',name:'划分脑区',mount:mountHemisphere}];
 
 export function mountPlugins(container,viewer) {
+  const registerNavigation=createPluginNavigation();
+  let replayController;
+  const openPrediction=options=>replayController.openPrediction(options);
   for(const plugin of plugins) {
     const details=document.createElement('details');details.className='plugin-card';details.id='plugin-'+plugin.id;details.open=true;
     const summary=document.createElement('summary');summary.textContent=plugin.name;
     const body=document.createElement('div');body.className='plugin-body';details.append(summary,body);container.append(details);
-    plugin.mount(body,viewer);
+    const controller=plugin.mount(body,{...viewer,openPrediction,navigation:registerNavigation(body)});
+    if(plugin.id==='trace')replayController=controller;
   }
 }
 
